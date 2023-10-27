@@ -1,21 +1,19 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
-
 package com.example.imu_demo
 
 import android.os.Bundle
-import android.Manifest
-import android.content.pm.PackageManager
+import android.app.Activity
+import android.bluetooth.BluetoothAdapter
+import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,15 +23,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -45,67 +39,67 @@ import com.example.imu_demo.screens.MeasurementScreen
 import com.example.imu_demo.ui.theme.IMU_DemoTheme
 import com.example.imu_demo.screens.ScanScreen
 
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-    companion object {
-        const val BLUETOOTH_PERMISSION_CODE = 1
-    }
+    @Inject lateinit var bluetoothAdapter: BluetoothAdapter
 
+    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             IMU_DemoTheme {
                 // A surface container using the 'background' color from the theme
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    MainScreen()
+                val navController = rememberNavController()
+                Scaffold(
+                    topBar = { TopAppBar(title = {Text("Bottom Navigation Demo")}) },
+                    bottomBar = { BottomNavigation(navController = navController)}
+                ){
+                    Box(Modifier.padding(it)){
+                        NavigationGraph(onBluetoothStateChanged =
+                        {showBluetoothDialog()})
+                    }
                 }
             }
         }
-        checkBluetoothPermissions()
     }
-    private fun checkBluetoothPermissions() {
-        val bluetoothPermission = Manifest.permission.BLUETOOTH
-        val bluetoothAdminPermission = Manifest.permission.BLUETOOTH_ADMIN
+    override fun onStart() {
+        super.onStart()
+        showBluetoothDialog()
+    }
 
-        if (ContextCompat.checkSelfPermission(this, bluetoothPermission) != PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(this, bluetoothAdminPermission) != PackageManager.PERMISSION_GRANTED
-        ) {
-            // Request permissions
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(bluetoothPermission, bluetoothAdminPermission),
-                BLUETOOTH_PERMISSION_CODE
-            )
+    private var isBluetoothDialogAlreadyShown = false
+    private fun showBluetoothDialog(){
+        if(!bluetoothAdapter.isEnabled){
+            if(!isBluetoothDialogAlreadyShown){
+                val enableBluetoothIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+                startBluetoothIntentForResult.launch(enableBluetoothIntent)
+                isBluetoothDialogAlreadyShown = true
+            }
         }
     }
+
+    private val startBluetoothIntentForResult =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()){ result ->
+            isBluetoothDialogAlreadyShown = false
+            if(result.resultCode != Activity.RESULT_OK){
+                showBluetoothDialog()
+            }
+        }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+
 @Composable
-fun MainScreen() {
+fun NavigationGraph(onBluetoothStateChanged:()->Unit) {
     val navController = rememberNavController()
-
-    Scaffold(
-        topBar = { TopAppBar(title = {Text("Bottom Navigation Demo")}) },
-        bottomBar = { BottomNavigation(navController = navController)}
-    ){
-        Box(Modifier.padding(it)){
-            NavigationGraph(navController = navController)
-        }
-    }
-}
-
-@Composable
-fun NavigationGraph(navController: NavHostController) {
     NavHost(
         navController = navController,
         startDestination = BottomNavItem.Scan.screenRoute
     ){
         composable(BottomNavItem.Scan.screenRoute){
-            ScanScreen(navController = navController)
+            ScanScreen(onBluetoothStateChanged)
         }
 
         composable(BottomNavItem.Measurement.screenRoute){

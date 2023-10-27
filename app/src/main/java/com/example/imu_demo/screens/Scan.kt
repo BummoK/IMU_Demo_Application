@@ -1,235 +1,175 @@
 package com.example.imu_demo.screens
 
-import android.app.Activity
-import android.Manifest
 import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothDevice
-import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.util.Log
-import androidx.activity.compose.ManagedActivityResultLauncher
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
-import androidx.navigation.NavHostController
-import androidx.navigation.compose.rememberNavController
-import com.example.imu_demo.MainActivity.Companion.BLUETOOTH_PERMISSION_CODE
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import com.example.imu_demo.data.ConnectionState
+import com.example.imu_demo.permissions.PermissionUtils
+import com.example.imu_demo.permissions.SystemBroadcastReceiver
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.example.imu_demo.ui.theme.IMU_DemoTheme
 
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun ScanScreen(navController: NavHostController) {
-    val context = LocalContext.current
+fun ScanScreen(
+    onBluetoothStateChanged:()->Unit,
+    viewModel: ScanViewModel = hiltViewModel()
+) {
 
-    /** 요청할 권한 **/
-    val permissions = arrayOf(
-        Manifest.permission.BLUETOOTH,
-        Manifest.permission.BLUETOOTH_ADMIN,
-        Manifest.permission.BLUETOOTH_SCAN,
-        Manifest.permission.BLUETOOTH_CONNECT
-    )
-
-    val launcherMultiplePermissions = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissionsMap ->
-        val areGranted = permissionsMap.values.reduce { acc, next -> acc && next }
-        /** 권한 요청시 동의 했을 경우 **/
-        if (areGranted) {
-            Log.d("test5", "권한이 동의되었습니다.")
-        }
-        /** 권한 요청시 거부 했을 경우 **/
-        else {
-            Log.d("test5", "권한이 거부되었습니다.")
+    SystemBroadcastReceiver(systemAction = BluetoothAdapter.ACTION_STATE_CHANGED){ bluetoothState ->
+        val action = bluetoothState?.action ?: return@SystemBroadcastReceiver
+        if(action == BluetoothAdapter.ACTION_STATE_CHANGED){
+            onBluetoothStateChanged()
         }
     }
 
-    fun checkAndRequestPermissions(
-        context: Context,
-        permissions: Array<String>,
-        launcher: ManagedActivityResultLauncher<Array<String>, Map<String, Boolean>>,
-    ) {
+    val permissionState = rememberMultiplePermissionsState(permissions = PermissionUtils.permissions)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val bleConnectionState = viewModel.connectionState
 
-        /** 권한이 이미 있는 경우 **/
-        if (permissions.all {
-                ContextCompat.checkSelfPermission(
-                    context,
-                    it
-                ) == PackageManager.PERMISSION_GRANTED
-            }) {
-            Log.d("test5", "권한이 이미 존재합니다.")
-        }
-
-        /** 권한이 없는 경우 **/
-        else {
-            launcher.launch(permissions)
-            Log.d("test5", "권한을 요청하였습니다.")
-        }
-    }
-
-    var devices by remember { mutableStateOf<List<BluetoothDevice>>(emptyList()) }
-    var selectedDevice by remember { mutableStateOf<BluetoothDevice?>(null) }
-    var connecting by remember { mutableStateOf(false) }
-
-    val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
-
-    if (bluetoothAdapter == null) {
-        Text(text = "Bluetooth is not supported on this device")
-        return
-    }
-
-    if (!bluetoothAdapter.isEnabled) {
-        EnableBluetoothButton()
-        return
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        Button(onClick = {
-            checkAndRequestPermissions(
-                context,
-                permissions,
-                launcherMultiplePermissions
-            )
-        }) {
-            Text(text = "권한 요청하기")
-        }
-
-        Button(
-            onClick = {
-                // Check Bluetooth permission before scanning
-                if (ContextCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.BLUETOOTH
-                    ) == PackageManager.PERMISSION_GRANTED
-                ) {
-                    // Scanning for Bluetooth devices
-                    devices = bluetoothAdapter.bondedDevices?.toList() ?: emptyList()
-                } else {
-                    // Request Bluetooth permission
-                    ActivityCompat.requestPermissions(
-                        context as Activity,
-                        arrayOf(Manifest.permission.BLUETOOTH),
-                        BLUETOOTH_PERMISSION_CODE
-                    )
+    DisposableEffect(
+        key1 = lifecycleOwner,
+        effect = {
+            val observer = LifecycleEventObserver{_,event ->
+                if(event == Lifecycle.Event.ON_START){
+                    permissionState.launchMultiplePermissionRequest()
+                    if(permissionState.allPermissionsGranted && bleConnectionState == ConnectionState.Disconnected){
+                        viewModel.reconnect()
+                    }
                 }
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp)
-        ) {
-            Text(text = "Scan for Devices")
-        }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        @Composable
-        fun DeviceListItem(device: BluetoothDevice, selectedDevice: BluetoothDevice?, onItemSelected: (BluetoothDevice) -> Unit) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp)
-            ) {
-                Text(
-                    text = device.name ?: "Unknown Device",
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable {
-                            onItemSelected(device)
-                        }
-                )
-                if (selectedDevice == device) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.dp
-                    )
-                }
-            }
-        }
-
-        if (devices.isNotEmpty()) {
-            LazyColumn {
-                itemsIndexed(devices) { index, device ->
-                    DeviceListItem(device = device, selectedDevice = selectedDevice) {
-                        selectedDevice = it
+                if(event == Lifecycle.Event.ON_STOP){
+                    if (bleConnectionState == ConnectionState.Connected){
+                        viewModel.disconnect()
                     }
                 }
             }
+            lifecycleOwner.lifecycle.addObserver(observer)
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Button(
-                onClick = {
-                    connecting = true
-                    // In a real app, you would handle Bluetooth connection here
-                    // and navigate to the next screen upon successful connection.
-                    navController.navigate("data")
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp)
-            ) {
-                Text(text = "Connect to ${selectedDevice?.name ?: "Unknown Device"}")
+            onDispose {
+                lifecycleOwner.lifecycle.removeObserver(observer)
             }
-        } else {
-            Text(text = "No devices found")
         }
-    }
-}
+    )
 
-@Composable
-fun EnableBluetoothButton() {
-    val enableBtLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            // Bluetooth is enabled, you can proceed with other actions
-        } else {
-            // The user didn't enable Bluetooth
+    LaunchedEffect(key1 = permissionState.allPermissionsGranted){
+        if(permissionState.allPermissionsGranted){
+            if(bleConnectionState == ConnectionState.Uninitialized){
+                viewModel.initializeConnection()
+            }
         }
     }
 
-    Button(
-        onClick = {
-            val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
-            enableBtLauncher.launch(enableBtIntent)
-        },
+    Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(8.dp)
-    ) {
-        Text(text = "Enable Bluetooth")
+            .fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ){
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.6f)
+                .aspectRatio(1f)
+                .border(
+                    BorderStroke(
+                        5.dp, Color.Blue
+                    ),
+                    RoundedCornerShape(10.dp)
+                ),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ){
+            if(bleConnectionState == ConnectionState.CurrentlyInitializing){
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(5.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ){
+                    CircularProgressIndicator()
+                    if(viewModel.initializingMessage != null){
+                        Text(
+                            text = viewModel.initializingMessage!!
+                        )
+                    }
+                }
+            }else if(!permissionState.allPermissionsGranted){
+                Text(
+                    text = "Go to the app setting and allow the missing permissions.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(10.dp),
+                    textAlign = TextAlign.Center
+                )
+            }else if(viewModel.errorMessage != null){
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = viewModel.errorMessage!!
+                    )
+                    Button(
+                        onClick = {
+                            if(permissionState.allPermissionsGranted){
+                                viewModel.initializeConnection()
+                            }
+                        }
+                    ) {
+                        Text(
+                            "Try again"
+                        )
+                    }
+                }
+            }else if(bleConnectionState == ConnectionState.Connected){
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ){
+                    Text(
+                        text = "Humidity: ${viewModel.humidity}",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    Text(
+                        text = "Temperature: ${viewModel.temperature}",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                }
+            }else if(bleConnectionState == ConnectionState.Disconnected){
+                Button(onClick = {
+                    viewModel.initializeConnection()
+                }) {
+                    Text("Initialize again")
+                }
+            }
+        }
     }
-}
 
+}
 
 @Preview(showBackground = true)
 @Composable
 fun ScanScreenPreview() {
-    val navController = rememberNavController()
     IMU_DemoTheme {
-        ScanScreen(navController = navController)
     }
 }
