@@ -1,4 +1,4 @@
-package com.example.imu_demo.screens
+package com.example.imu_demo.presentation
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
