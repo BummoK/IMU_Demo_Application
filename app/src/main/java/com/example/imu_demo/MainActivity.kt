@@ -17,17 +17,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
-import androidx.hilt.navigation.compose.hiltViewModel
 
 import androidx.navigation.compose.rememberNavController
 import com.example.imu_demo.navigations.BottomNavigation
 import com.example.imu_demo.navigations.NavigationGraph
-import com.example.imu_demo.presentation.BluetoothViewModel
 import com.example.imu_demo.ui.theme.IMU_DemoTheme
-import com.example.imu_demo.presentation.ScanScreen
 import dagger.hilt.android.AndroidEntryPoint
 
 
