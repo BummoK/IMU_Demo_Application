@@ -1,50 +1,142 @@
 package com.example.imu_demo.presentation
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.hilt.navigation.compose.hiltViewModel
-import com.example.imu_demo.R
-import com.example.imu_demo.ui.theme.IMU_DemoTheme
 
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+
+import com.github.mikephil.charting.data.*
+
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MeasurementScreen(
-    state: BluetoothUiState,
+    viewModel: BluetoothViewModel = hiltViewModel()
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.secondary)
-    ) {
-        Text(
-            text = stringResource(id = R.string.text_measurement),
-            style = MaterialTheme.typography.displayLarge,
-            textAlign = TextAlign.Center,
-            color = Color.White,
-            modifier = Modifier.align(Alignment.Center)
-        )
-    }
-}
+    // 낙상검출 알고리즘 파라미터
+    var velV by remember { mutableDoubleStateOf(0.0) }
+    var dect by remember { mutableStateOf(false) }
+    var reset by remember { mutableStateOf(true) }
 
-@Preview(showBackground = true)
-@Composable
-fun MeasurementPreview() {
-    val viewModel = hiltViewModel<BluetoothViewModel>()
-    val state by viewModel.state.collectAsState()
-    IMU_DemoTheme {
-        MeasurementScreen(
-            state = state,
+    val timerValue by viewModel.timerValue.collectAsState()
+    val accXValue by viewModel.accXValue.collectAsState()
+    val accYValue by viewModel.accYValue.collectAsState()
+    val accZValue by viewModel.accZValue.collectAsState()
+    val gyroXValue by viewModel.gyroXValue.collectAsState()
+    val gyroYValue by viewModel.gyroYValue.collectAsState()
+    val gyroZValue by viewModel.gyroZValue.collectAsState()
+
+    // 차트 데이터 리스트
+    val accChartDataX = remember { mutableListOf<Entry>() }
+    val accChartDataY = remember { mutableListOf<Entry>() }
+    val accChartDataZ = remember { mutableListOf<Entry>() }
+    val gyroChartDataX = remember { mutableListOf<Entry>() }
+    val gyroChartDataY = remember { mutableListOf<Entry>() }
+    val gyroChartDataZ = remember { mutableListOf<Entry>() }
+
+    // 센서 값 업데이트
+    LaunchedEffect(timerValue, accXValue, accYValue, accZValue, gyroXValue, gyroYValue, gyroZValue) {
+        val time = (timerValue ?: 0L) / 1000f // timerValue를 Float으로 변환
+        updateChartData(accChartDataX, accXValue, time)
+        updateChartData(accChartDataY, accYValue, time)
+        updateChartData(accChartDataZ, accZValue, time)
+        updateChartData(gyroChartDataX, gyroXValue, time)
+        updateChartData(gyroChartDataY, gyroYValue, time)
+        updateChartData(gyroChartDataZ, gyroZValue, time)
+
+        val (newVelV, newDect) = fallDetection(
+            accXValue ?: 0f, accYValue ?: 0f, accZValue ?: 0f,
+            gyroXValue ?: 0f, gyroYValue ?: 0f, gyroZValue ?: 0f, velV
         )
+        velV = newVelV
+        dect = newDect
+
+        if (dect) reset=false
+    }
+
+    Column(modifier = Modifier
+        .fillMaxSize()
+        .background(MaterialTheme.colorScheme.secondary)
+        .padding(16.dp)
+    ) {
+        Row(
+        ){
+            Card(
+                modifier = Modifier.fillMaxWidth(0.5f).weight(1f),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(10.dp)
+                ) {
+                    Text("Parameter", style = MaterialTheme.typography.bodyLarge)
+                    Text("Timer: ${timerValue ?: "N/A"}", style = MaterialTheme.typography.bodySmall)
+                    Text("Acceleration X: ${accXValue?.let { "%.2f".format(it) } ?: "N/A"}", style = MaterialTheme.typography.bodySmall)
+                    Text("Acceleration Y: ${accYValue?.let { "%.2f".format(it) } ?: "N/A"}", style = MaterialTheme.typography.bodySmall)
+                    Text("Acceleration Z: ${accZValue?.let { "%.2f".format(it) } ?: "N/A"}", style = MaterialTheme.typography.bodySmall)
+                    Text("Gyroscope X: ${gyroXValue?.let { "%.2f".format(it) } ?: "N/A"}", style = MaterialTheme.typography.bodySmall)
+                    Text("Gyroscope Y: ${gyroYValue?.let { "%.2f".format(it) } ?: "N/A"}", style = MaterialTheme.typography.bodySmall)
+                    Text("Gyroscope Z: ${gyroZValue?.let { "%.2f".format(it) } ?: "N/A"}", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp)
+                    ) {
+                        Text("Current Velocity", style = MaterialTheme.typography.bodyLarge)
+                        Text("${"%.2f".format(velV)} m/s", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { reset = true },
+                    colors = if (!reset) CardDefaults.cardColors(containerColor = Color.Red)
+                    else CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp)
+                    ) {
+                        Text("Fall Detected", style = MaterialTheme.typography.bodyLarge)
+                        Text("${if (reset) "No" else "Yes"}")
+                    }
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        LineChartComposable("Accelerometer", accChartDataX, accChartDataY, accChartDataZ)
+        Spacer(modifier = Modifier.height(4.dp))
+        LineChartComposable("Gyroscope", gyroChartDataX, gyroChartDataY, gyroChartDataZ)
     }
 }

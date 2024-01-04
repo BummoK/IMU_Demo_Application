@@ -2,18 +2,31 @@ package com.example.imu_demo.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.util.Log
 import com.example.imu_demo.domain.BluetoothController
 import com.example.imu_demo.domain.BluetoothDeviceDomain
 import com.example.imu_demo.domain.ConnectionResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class BluetoothViewModel @Inject constructor(
     private val bluetoothController: BluetoothController
 ): ViewModel() {
+
+    private val TAG = "BLEViewModel"
+
+    val timerValue = bluetoothController.timerValueStateFlow
+    val accXValue = bluetoothController.accXValueStateFlow
+    val accYValue = bluetoothController.accYValueStateFlow
+    val accZValue = bluetoothController.accZValueStateFlow
+    val gyroXValue = bluetoothController.gyroXValueStateFlow
+    val gyroYValue = bluetoothController.gyroYValueStateFlow
+    val gyroZValue = bluetoothController.gyroZValueStateFlow
+    val batteryValue = bluetoothController.batteryValueStateFlow
 
     private val _state = MutableStateFlow(BluetoothUiState())
     val state = combine(
@@ -38,7 +51,16 @@ class BluetoothViewModel @Inject constructor(
                 errorMessage = error
             ) }
         }.launchIn(viewModelScope)
+
+        bluetoothController.accXValueStateFlow.onEach { value ->
+//            Log.d(TAG, "Acceleration X: $value")
+        }.launchIn(viewModelScope)
+
+        bluetoothController.accYValueStateFlow.onEach { value ->
+//            Log.d(TAG, "Acceleration Y: $value")
+        }.launchIn(viewModelScope)
     }
+
 
     fun connectToDevice(device: BluetoothDeviceDomain) {
         _state.update { it.copy(isConnecting = true) }

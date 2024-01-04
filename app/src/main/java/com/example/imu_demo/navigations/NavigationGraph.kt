@@ -48,7 +48,7 @@ fun NavigationGraph(navController: NavHostController) {
 
         composable(BottomNavItem.Measurement.screenRoute){
             MeasurementScreen(
-                state = state,
+                viewModel = viewModel,
             )
         }
 

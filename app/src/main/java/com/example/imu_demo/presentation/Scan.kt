@@ -141,7 +141,7 @@ fun BluetoothDeviceList(
         items(pairedDevices) {device ->
             val textColor = if (device.isConnected) Color.Red else Color.Black
             Text(
-                text = device.name ?:"(No name)",
+                text = (device.name ?: "No name") + " " + "(${device.address})",
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable {
@@ -166,7 +166,8 @@ fun BluetoothDeviceList(
         }
         items(scannedDevices) {device ->
             val textColor = if (device.isConnected) Color.Red else Color.Black
-            Text(text = device.name ?:"(No name)",
+            Text(
+                text = (device.name ?: "No name") + " " + "(${device.address})",
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable {

@@ -3,32 +3,34 @@ package com.example.imu_demo.data.ble
 import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothDevice
-import android.content.Context
-import android.content.IntentFilter
-import android.content.pm.PackageManager
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
+import android.bluetooth.BluetoothGattDescriptor
+import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
-import com.example.imu_demo.domain.BluetoothDeviceDomain
+import android.content.Context
+import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.util.Log
 import com.example.imu_demo.domain.BluetoothController
+import com.example.imu_demo.domain.BluetoothDeviceDomain
 import com.example.imu_demo.domain.ConnectionResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.UUID
 
 @SuppressLint("MissingPermission")
 class AndroidBluetoothController(
     private val context: Context
 ): BluetoothController {
+
+    private val TAG = "Central"
 
     private val bluetoothManager by lazy {
         context.getSystemService(BluetoothManager::class.java)
@@ -70,8 +72,45 @@ class AndroidBluetoothController(
             }
         }
     }
+
+
+    private val _timerValueStateFlow = MutableStateFlow<Long?>(null)
+    override val timerValueStateFlow: StateFlow<Long?> = _timerValueStateFlow
+
+    private val _accXValueStateFlow = MutableStateFlow<Float?>(null)
+    override val accXValueStateFlow: StateFlow<Float?> = _accXValueStateFlow
+
+    private val _accYValueStateFlow = MutableStateFlow<Float?>(null)
+    override val accYValueStateFlow: StateFlow<Float?> = _accYValueStateFlow
+
+    private val _accZValueStateFlow = MutableStateFlow<Float?>(null)
+    override val accZValueStateFlow: StateFlow<Float?> = _accZValueStateFlow
+
+    private val _gyroXValueStateFlow = MutableStateFlow<Float?>(null)
+    override val gyroXValueStateFlow: StateFlow<Float?> = _gyroXValueStateFlow
+
+    private val _gyroYValueStateFlow = MutableStateFlow<Float?>(null)
+    override val gyroYValueStateFlow: StateFlow<Float?> = _gyroYValueStateFlow
+
+    private val _gyroZValueStateFlow = MutableStateFlow<Float?>(null)
+    override val gyroZValueStateFlow: StateFlow<Float?> = _gyroZValueStateFlow
+
+    private val _batteryValueStateFlow = MutableStateFlow<Float?>(null)
+    override val batteryValueStateFlow: StateFlow<Float?> = _batteryValueStateFlow
+
+    // UUID 정의
     private val serviceUUID = UUID.fromString("ABF0E000-B597-4BE0-B869-6054B7ED0CE3")
-    private val characteristicUUID = UUID.fromString("ABF0E002-B597-4BE0-B869-6054B7ED0CE3")
+    private val imuDataCharUUID = UUID.fromString("ABF0E001-B597-4BE0-B869-6054B7ED0CE3") // 수정된 특성 UUID
+
+    // 특성 참조 추가
+    private var timerChar: BluetoothGattCharacteristic? = null
+    private var accXChar: BluetoothGattCharacteristic? = null
+    private var accYChar: BluetoothGattCharacteristic? = null
+    private var accZChar: BluetoothGattCharacteristic? = null
+    private var gyroXChar: BluetoothGattCharacteristic? = null
+    private var gyroYChar: BluetoothGattCharacteristic? = null
+    private var gyroZChar: BluetoothGattCharacteristic? = null
+    private var tempChar: BluetoothGattCharacteristic? = null
 
     init {
         updatePairedDevices()
@@ -144,36 +183,91 @@ class AndroidBluetoothController(
                 BluetoothProfile.STATE_CONNECTED -> {
                     updateDeviceConnectionStatus(deviceAddress, true)
                     gatt.discoverServices()
+                    Log.d(TAG, "Connected to the GATT server")
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     updateDeviceConnectionStatus(deviceAddress, false)
+                    Log.d(TAG, "Disconnected to the GATT server")
                 }
             }
         }
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
-                for (service in gatt.services) {
-                    if (service.uuid == serviceUUID) {
-                        for (characteristic in service.characteristics) {
-                            if (characteristic.uuid == characteristicUUID) {
-                                // Arduino 센서 데이터를 읽기 위한 로직
-                                gatt.readCharacteristic(characteristic)
+                val service = gatt.getService(serviceUUID)
+                service?.let {
+                    it.characteristics.forEach { characteristic ->
+                        // 알림이 가능한 특성인지 확인
+                        if ((characteristic.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0) {
+                            gatt.setCharacteristicNotification(characteristic, true)
+
+                            // Descriptor 설정
+                            val descriptor = characteristic.getDescriptor(
+                                UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+                            )
+                            descriptor?.let {
+                                it.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                                gatt.writeDescriptor(it)
                             }
                         }
                     }
                 }
+            } else {
+                Log.w(TAG, "onServicesDiscovered received: $status")
             }
         }
 
-        override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                // 데이터 읽기 처리
-                val data = characteristic.value
-                // 데이터 처리 로직
+        override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
+            super.onCharacteristicChanged(gatt, characteristic)
+
+            // characteristic.getValue()는 데이터의 바이트 배열을 반환합니다.
+            val data = characteristic.value
+
+            // 받아온 데이터의 바이트 수를 로그로 출력
+//            Log.d(TAG, "Received data length: ${data.size} bytes")
+
+            if (characteristic.uuid == imuDataCharUUID) {
+                val dataString = data.joinToString(", ") { it.toString() }
+//                Log.d(TAG, "Received data: $dataString")
+                parseIMUData(characteristic.value)
             }
         }
-        // 필요한 경우 데이터 쓰기 관련 콜백 메서드 추가
+
+        private fun parseIMUData(data: ByteArray) {
+            val buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
+
+            val startMarker = String(data.sliceArray(0..1), Charsets.UTF_8)
+            val endMarker = String(data.sliceArray(15..16), Charsets.UTF_8)
+
+            if (startMarker == "ST" && endMarker == "ED") {
+//                Log.e(TAG, "parsing success")
+                val time = ByteBuffer.wrap(data.sliceArray(4..7)).order(ByteOrder.LITTLE_ENDIAN).getInt().toLong()
+                val accX = byteToFloat(buffer.get(8), -16.0f, 16.0f)    // 변환된 가속도 X
+                val accY = byteToFloat(buffer.get(9), -16.0f, 16.0f)    // 변환된 가속도 Y
+                val accZ = byteToFloat(buffer.get(10), -16.0f, 16.0f)    // 변환된 가속도 Z
+                val gyroX = byteToFloat(buffer.get(11), -2000f, 2000f) // 변환된 자이로스코프 X
+                val gyroY = byteToFloat(buffer.get(12), -2000f, 2000f) // 변환된 자이로스코프 Y
+                val gyroZ = byteToFloat(buffer.get(13), -2000f, 2000f) // 변환된 자이로스코프 Z
+                val battery = byteToFloat(buffer.get(14), -0f, 100f)      // 변환된 온도
+
+                // 이제 각 값들을 StateFlow에 업데이트
+                _timerValueStateFlow.value = time
+                _accXValueStateFlow.value = accX
+                _accYValueStateFlow.value = accY
+                _accZValueStateFlow.value = accZ
+                _gyroXValueStateFlow.value = gyroX
+                _gyroYValueStateFlow.value = gyroY
+                _gyroZValueStateFlow.value = gyroZ
+                _batteryValueStateFlow.value = battery
+            } else {
+                Log.e(TAG, "Error parsing IMU data")
+            }
+        }
+
+        private fun byteToFloat(byteValue: Byte, minVal: Float, maxVal: Float): Float {
+            val normalized = (byteValue.toInt() and 0xFF) / 255f
+            return minVal + (maxVal - minVal) * normalized
+        }
     }
     // 기타 필요한 메서드 및 처리 로직
 
