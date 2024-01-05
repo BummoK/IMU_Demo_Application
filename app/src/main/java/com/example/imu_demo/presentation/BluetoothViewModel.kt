@@ -1,8 +1,15 @@
 package com.example.imu_demo.presentation
 
+import android.content.Context
+import android.os.Environment
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.util.Log
+import com.example.imu_demo.data.dao.AppDatabase
+import com.example.imu_demo.data.dao.CSVFileHandler
+import com.example.imu_demo.data.dao.CSVFileHandler.saveDataToCSV
+import com.example.imu_demo.data.dao.SensorData
+import com.example.imu_demo.data.dao.SensorDataDao
 import com.example.imu_demo.domain.BluetoothController
 import com.example.imu_demo.domain.BluetoothDeviceDomain
 import com.example.imu_demo.domain.ConnectionResult
@@ -10,14 +17,23 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.io.File
+import java.io.IOException
+import java.lang.Exception
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 @HiltViewModel
 class BluetoothViewModel @Inject constructor(
-    private val bluetoothController: BluetoothController
+    private val bluetoothController: BluetoothController,
+    private val sensorDataDao: SensorDataDao,
+    private val appDatabase: AppDatabase
 ): ViewModel() {
 
     private val TAG = "BLEViewModel"
+
 
     val timerValue = bluetoothController.timerValueStateFlow
     val accXValue = bluetoothController.accXValueStateFlow
@@ -115,6 +131,41 @@ class BluetoothViewModel @Inject constructor(
                 ) }
             }
             .launchIn(viewModelScope)
+    }
+
+
+    fun saveSensorData(sensorData: SensorData) {
+        viewModelScope.launch {
+            sensorDataDao.insert(sensorData)
+        }
+    }
+
+    fun fetchAndLogSensorData() {
+        viewModelScope.launch {
+            sensorDataDao.getAll()
+                .collect { sensorDataList -> // Flow를 수집합니다.
+                    sensorDataList.forEach { sensorData ->
+                        Log.d("SensorDataLog", "Data: $sensorData")
+                    }
+                }
+        }
+    }
+
+    fun stopRecordingAndExportToCSV(context: Context, onExportComplete: (String) -> Unit) {
+        viewModelScope.launch {
+            val sensorDataList = sensorDataDao.getAll().first()
+            val fileName = "SensorData_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())}.csv"
+
+            try {
+                CSVFileHandler.saveDataToCSV(context, sensorDataList, fileName)
+                val fullPath = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                    "Experiments/$fileName").absolutePath
+                Log.d("stopRecording", "Sensor data saved: $fullPath")
+                onExportComplete(fullPath) // 전체 경로를 콜백으로 전달
+            } catch (e: Exception) {
+                Log.e("stopRecording", "Error saving sensor data: ${e.message}")
+            }
+        }
     }
 
     override fun onCleared() {
