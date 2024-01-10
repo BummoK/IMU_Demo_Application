@@ -67,14 +67,6 @@ class BluetoothViewModel @Inject constructor(
                 errorMessage = error
             ) }
         }.launchIn(viewModelScope)
-
-        bluetoothController.accXValueStateFlow.onEach { value ->
-//            Log.d(TAG, "Acceleration X: $value")
-        }.launchIn(viewModelScope)
-
-        bluetoothController.accYValueStateFlow.onEach { value ->
-//            Log.d(TAG, "Acceleration Y: $value")
-        }.launchIn(viewModelScope)
     }
 
 
@@ -162,6 +154,7 @@ class BluetoothViewModel @Inject constructor(
                     "Experiments/$fileName").absolutePath
                 Log.d("stopRecording", "Sensor data saved: $fullPath")
                 onExportComplete(fullPath) // 전체 경로를 콜백으로 전달
+                sensorDataDao.deleteAll()
             } catch (e: Exception) {
                 Log.e("stopRecording", "Error saving sensor data: ${e.message}")
             }
