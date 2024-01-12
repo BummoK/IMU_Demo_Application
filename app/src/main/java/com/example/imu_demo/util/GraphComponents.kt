@@ -1,4 +1,4 @@
-package com.example.imu_demo.presentation
+package com.example.imu_demo.util
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth

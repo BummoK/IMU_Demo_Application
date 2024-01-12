@@ -1,4 +1,4 @@
-package com.example.imu_demo.presentation
+package com.example.imu_demo.util
 
 import android.content.Context
 import android.os.Environment
@@ -7,7 +7,6 @@ import androidx.lifecycle.viewModelScope
 import android.util.Log
 import com.example.imu_demo.data.dao.AppDatabase
 import com.example.imu_demo.data.dao.CSVFileHandler
-import com.example.imu_demo.data.dao.CSVFileHandler.saveDataToCSV
 import com.example.imu_demo.data.dao.SensorData
 import com.example.imu_demo.data.dao.SensorDataDao
 import com.example.imu_demo.domain.BluetoothController
@@ -18,7 +17,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
-import java.io.IOException
 import java.lang.Exception
 import java.text.SimpleDateFormat
 import java.util.Date

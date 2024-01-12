@@ -21,6 +21,8 @@ import androidx.compose.ui.platform.LocalContext
 
 import com.example.imu_demo.domain.BluetoothDevice
 import com.example.imu_demo.ui.theme.IMU_DemoTheme
+import com.example.imu_demo.util.BluetoothUiState
+import com.example.imu_demo.util.BluetoothViewModel
 
 @Composable
 fun ScanScreen(

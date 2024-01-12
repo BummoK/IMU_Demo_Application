@@ -18,10 +18,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -32,6 +34,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.imu_demo.data.dao.SensorData
+import com.example.imu_demo.util.BluetoothViewModel
+import com.example.imu_demo.util.DataPreprocessor
+import com.example.imu_demo.util.LineChartComposable
+import com.example.imu_demo.util.MotionRecogition
+import com.example.imu_demo.util.fallDetection
+import com.example.imu_demo.util.updateChartData
 
 import com.github.mikephil.charting.data.*
 
@@ -39,22 +47,31 @@ import com.github.mikephil.charting.data.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MeasurementScreen(
-    viewModel: BluetoothViewModel = hiltViewModel()
+    bluetoothViewModel: BluetoothViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     var isRecording by remember { mutableStateOf(false) }
     // 낙상검출 알고리즘 파라미터
     var velV by remember { mutableDoubleStateOf(0.0) }
+    var acc by remember { mutableFloatStateOf(0.0F) }
+    var gyro by remember { mutableFloatStateOf(0.0F) }
     var dect by remember { mutableStateOf(false) }
     var reset by remember { mutableStateOf(true) }
 
-    val timerValue by viewModel.timerValue.collectAsState()
-    val accXValue by viewModel.accXValue.collectAsState()
-    val accYValue by viewModel.accYValue.collectAsState()
-    val accZValue by viewModel.accZValue.collectAsState()
-    val gyroXValue by viewModel.gyroXValue.collectAsState()
-    val gyroYValue by viewModel.gyroYValue.collectAsState()
-    val gyroZValue by viewModel.gyroZValue.collectAsState()
+    val sensorDataBuffer = remember { Array(8) { MutableList(60) { 0f } } }
+    val classifier = remember { MotionRecogition(context).apply { init() } }
+
+    var maxClassState by remember { mutableStateOf(0) } // 클래스의 초기값은 0
+    var maxProbState by remember { mutableStateOf(0f) } // 확률의 초기값은 0f
+
+
+    val timerValue by bluetoothViewModel.timerValue.collectAsState()
+    val accXValue by bluetoothViewModel.accXValue.collectAsState()
+    val accYValue by bluetoothViewModel.accYValue.collectAsState()
+    val accZValue by bluetoothViewModel.accZValue.collectAsState()
+    val gyroXValue by bluetoothViewModel.gyroXValue.collectAsState()
+    val gyroYValue by bluetoothViewModel.gyroYValue.collectAsState()
+    val gyroZValue by bluetoothViewModel.gyroZValue.collectAsState()
 
     // 차트 데이터 리스트
     val accChartDataX = remember { mutableListOf<Entry>() }
@@ -77,7 +94,7 @@ fun MeasurementScreen(
         )
 
         if (isRecording) {
-            viewModel.saveSensorData(sensorData)
+            bluetoothViewModel.saveSensorData(sensorData)
         }
 
         val time = (timerValue ?: 0L) / 1000f // timerValue를 Float으로 변환
@@ -88,14 +105,59 @@ fun MeasurementScreen(
         updateChartData(gyroChartDataY, gyroYValue, time)
         updateChartData(gyroChartDataZ, gyroZValue, time)
 
-        val (newVelV, newDect) = fallDetection(
+        val (newVelV, newDect, newAcc, newGyro) = fallDetection(
             accXValue ?: 0f, accYValue ?: 0f, accZValue ?: 0f,
             gyroXValue ?: 0f, gyroYValue ?: 0f, gyroZValue ?: 0f, velV
         )
         velV = newVelV
         dect = newDect
+        acc = newAcc
+        gyro = newGyro
 
         if (dect) reset=false
+
+        // 버퍼에 데이터 추가
+        sensorDataBuffer[0].add(accXValue ?: 0f)
+        sensorDataBuffer[1].add(accYValue ?: 0f)
+        sensorDataBuffer[2].add(accZValue ?: 0f)
+        sensorDataBuffer[3].add(gyroXValue ?: 0f)
+        sensorDataBuffer[4].add(gyroYValue ?: 0f)
+        sensorDataBuffer[5].add(gyroZValue ?: 0f)
+        sensorDataBuffer[6].add(acc)
+        sensorDataBuffer[7].add(gyro)
+        DataPreprocessor.shiftBuffer(sensorDataBuffer)
+
+
+        // 버퍼가 가득 찼을 때 처리
+        if (sensorDataBuffer[0].size == 60) {
+            Log.d("Buffer", "full")
+            val modelInputData = DataPreprocessor.prepareModelInput(sensorDataBuffer)
+
+
+            val classification = classifier.classify(modelInputData)
+
+            // 가장 높은 확률을 가진 클래스 찾기
+            val maxEntry = classification.maxByOrNull { it.value }
+
+            if (maxEntry != null) {
+                maxClassState = maxEntry.key
+                maxProbState = maxEntry.value
+                Log.d("ClassificationResult", "success")
+            } else {
+                maxClassState = 0 // 기본값 할당
+                maxProbState = 0f // 기본값 할당
+                Log.d("ClassificationResult", "Fail")
+            }
+
+            // 분류 결과 로그로 출력
+//            Log.d("MeasurementScreen", "Class: $maxClassState, Probability: $maxProbState")
+
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            classifier.finish()
+        }
     }
 
     Column(modifier = Modifier
@@ -167,7 +229,7 @@ fun MeasurementScreen(
             } else {
                 // 데이터 기록을 중지합니다. LaunchedEffect는 더 이상 데이터를 저장하지 않습니다.
                 // 저장된 데이터를 CSV 파일로 내보냅니다.
-                viewModel.stopRecordingAndExportToCSV(context) { filePath ->
+                bluetoothViewModel.stopRecordingAndExportToCSV(context) { filePath ->
                     Toast.makeText(context, "Data saved to $filePath", Toast.LENGTH_LONG).show()
                     Log.d("MeasurementScreen", "Sensor data saved: $filePath")
                 }
@@ -175,8 +237,9 @@ fun MeasurementScreen(
         }) {
             Text(if (isRecording) "Stop Recording" else "Start Recording")
         }
-        Button(onClick = { viewModel.fetchAndLogSensorData() }) {
+        Button(onClick = { bluetoothViewModel.fetchAndLogSensorData() }) {
             Text("Log Sensor Data")
         }
+        Text("Predicted Class: $maxClassState, Probability: ${"%.2f".format(maxProbState)}")
     }
 }

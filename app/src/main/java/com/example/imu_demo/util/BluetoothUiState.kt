@@ -1,4 +1,4 @@
-package com.example.imu_demo.presentation
+package com.example.imu_demo.util
 
 import com.example.imu_demo.domain.BluetoothDevice
 import kotlinx.coroutines.flow.Flow

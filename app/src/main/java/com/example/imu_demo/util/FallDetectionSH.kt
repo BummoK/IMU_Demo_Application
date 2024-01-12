@@ -1,19 +1,24 @@
-package com.example.imu_demo.presentation
+package com.example.imu_demo.util
 
 import kotlin.math.PI
 import kotlin.math.atan
 import kotlin.math.pow
 import kotlin.math.sqrt
-
+data class FallDetectionResult(
+    val newVelV: Double,
+    val detect: Boolean,
+    val acc: Float,
+    val gyro: Float
+)
 fun fallDetection(accX: Float, accY: Float, accZ: Float,
                   gyroX: Float, gyroY: Float, gyroZ: Float,
                   velV: Double
-):Pair<Double, Boolean> {
+):FallDetectionResult {
     val dt = 0.0083
 
-    var accXRev = accX*9.8
-    var accYRev = accY*9.8
-    var accZRev = accZ*9.8
+    var accXRev = accX*9.8f
+    var accYRev = accY*9.8f
+    var accZRev = accZ*9.8f
 
     var acc = sqrt(accXRev.pow(2)+accYRev.pow(2)+accZRev.pow(2))
     var gyro = sqrt(gyroX.pow(2)+gyroY.pow(2)+gyroZ.pow(2))
@@ -32,5 +37,5 @@ fun fallDetection(accX: Float, accY: Float, accZ: Float,
 
     val detect = newVelV > 0.5
 
-    return Pair(newVelV, detect)
+    return FallDetectionResult(newVelV, detect, acc, gyro)
 }

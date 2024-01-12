@@ -23,7 +23,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.imu_demo.presentation.AnalysisScreen
-import com.example.imu_demo.presentation.BluetoothViewModel
+import com.example.imu_demo.util.BluetoothViewModel
 import com.example.imu_demo.presentation.MeasurementScreen
 import com.example.imu_demo.presentation.ScanScreen
 
@@ -48,7 +48,7 @@ fun NavigationGraph(navController: NavHostController) {
 
         composable(BottomNavItem.Measurement.screenRoute){
             MeasurementScreen(
-                viewModel = viewModel,
+                bluetoothViewModel = viewModel,
             )
         }
 
