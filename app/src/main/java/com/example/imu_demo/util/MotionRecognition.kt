@@ -9,7 +9,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.channels.FileChannel
 
-class MotionRecogition(private val context: Context) {
+class MotionRecognition(private val context: Context) {
     private var interpreter: Interpreter? = null
     private var modelOutputClasses: Int = 0
 

@@ -3,9 +3,12 @@ package com.example.imu_demo.presentation
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,6 +18,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,24 +29,31 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.imu_demo.R
 import com.example.imu_demo.data.dao.SensorData
 import com.example.imu_demo.util.BluetoothViewModel
-import com.example.imu_demo.util.DataPreprocessor
+import com.example.imu_demo.util.DataPreprocessorMR
+import com.example.imu_demo.util.DataPreprocessorRP
 import com.example.imu_demo.util.LineChartComposable
-import com.example.imu_demo.util.MotionRecogition
+import com.example.imu_demo.util.MotionRecognition
+import com.example.imu_demo.util.RiskPrediction
 import com.example.imu_demo.util.fallDetection
 import com.example.imu_demo.util.updateChartData
 
 import com.github.mikephil.charting.data.*
+import java.lang.Math.abs
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,11 +70,26 @@ fun MeasurementScreen(
     var dect by remember { mutableStateOf(false) }
     var reset by remember { mutableStateOf(true) }
 
-    val sensorDataBuffer = remember { Array(8) { MutableList(60) { 0f } } }
-    val classifier = remember { MotionRecogition(context).apply { init() } }
+    val sensorDataBufferMR = remember { Array(8) { MutableList(60) { 0f } } }
+    val sensorDataBufferRP = remember { Array(8) { MutableList(15) { 0f } } }
+    val classifierMR = remember { MotionRecognition(context).apply { init() } }
+    val classifierRP = remember { RiskPrediction(context).apply { init() } }
 
-    var maxClassState by remember { mutableStateOf(0) } // 클래스의 초기값은 0
-    var maxProbState by remember { mutableStateOf(0f) } // 확률의 초기값은 0f
+    var maxClassStateMR by remember { mutableIntStateOf(0) } // 클래스의 초기값은 0
+    var maxProbStateMR by remember { mutableFloatStateOf(0f) } // 확률의 초기값은 0f
+    var maxClassStateRP by remember { mutableIntStateOf(0) } // 클래스의 초기값은 0
+    var maxProbStateRP by remember { mutableFloatStateOf(0f) } // 확률의 초기값은 0f
+
+    val motionName = when (maxClassStateMR) {
+        1 -> "서있기"
+        2 -> "앉았다 일어서기"
+        3 -> "보행"
+        4 -> "점프"
+        5 -> "전방낙상"
+        6 -> "후방낙상"
+        7 -> "측방낙상"
+        else -> "알 수 없음"
+    }
 
 
     val timerValue by bluetoothViewModel.timerValue.collectAsState()
@@ -117,36 +144,61 @@ fun MeasurementScreen(
         if (dect) reset=false
 
         // 버퍼에 데이터 추가
-        sensorDataBuffer[0].add(accXValue ?: 0f)
-        sensorDataBuffer[1].add(accYValue ?: 0f)
-        sensorDataBuffer[2].add(accZValue ?: 0f)
-        sensorDataBuffer[3].add(gyroXValue ?: 0f)
-        sensorDataBuffer[4].add(gyroYValue ?: 0f)
-        sensorDataBuffer[5].add(gyroZValue ?: 0f)
-        sensorDataBuffer[6].add(acc)
-        sensorDataBuffer[7].add(gyro)
-        DataPreprocessor.shiftBuffer(sensorDataBuffer)
+        val sensorValues = arrayOf(accXValue, accYValue, accZValue,
+            gyroXValue, gyroYValue, gyroZValue, acc, gyro)
+
+        for (i in sensorValues.indices) {
+            sensorDataBufferMR[i].add(sensorValues[i] ?: 0f)
+            sensorDataBufferRP[i].add(sensorValues[i] ?: 0f)
+        }
+        DataPreprocessorMR.shiftBufferMR(sensorDataBufferMR)
+        DataPreprocessorRP.shiftBufferRP(sensorDataBufferRP)
 
 
         // 버퍼가 가득 찼을 때 처리
-        if (sensorDataBuffer[0].size == 60) {
+        if (sensorDataBufferMR[0].size == 60) {
             Log.d("Buffer", "full")
-            val modelInputData = DataPreprocessor.prepareModelInput(sensorDataBuffer)
+            val modelInputDataMR = DataPreprocessorMR.prepareModelInputMR(sensorDataBufferMR)
 
 
-            val classification = classifier.classify(modelInputData)
+            val classificationMR = classifierMR.classify(modelInputDataMR)
 
             // 가장 높은 확률을 가진 클래스 찾기
-            val maxEntry = classification.maxByOrNull { it.value }
+            val maxEntryMR = classificationMR.maxByOrNull { it.value }
 
-            if (maxEntry != null) {
-                maxClassState = maxEntry.key
-                maxProbState = maxEntry.value
-                Log.d("ClassificationResult", "success")
+            if (maxEntryMR != null) {
+                maxClassStateMR = maxEntryMR.key
+                maxProbStateMR = maxEntryMR.value
+                Log.d("MRResult", "success")
             } else {
-                maxClassState = 0 // 기본값 할당
-                maxProbState = 0f // 기본값 할당
-                Log.d("ClassificationResult", "Fail")
+                maxClassStateMR = 0 // 기본값 할당
+                maxProbStateMR = 0f // 기본값 할당
+                Log.d("MRResult", "Fail")
+            }
+
+            // 분류 결과 로그로 출력
+//            Log.d("MeasurementScreen", "Class: $maxClassState, Probability: $maxProbState")
+
+        }
+
+        if (sensorDataBufferRP[0].size == 15) {
+            Log.d("Buffer", "full")
+            val modelInputDataRP = DataPreprocessorRP.prepareModelInputRP(sensorDataBufferRP)
+
+
+            val classificationRP = classifierRP.classify(modelInputDataRP)
+
+            // 가장 높은 확률을 가진 클래스 찾기
+            val maxEntryRP = classificationRP.maxByOrNull { it.value }
+
+            if (maxEntryRP != null) {
+                maxClassStateRP = maxEntryRP.key
+                maxProbStateRP = maxEntryRP.value
+                Log.d("RPResult", "success")
+            } else {
+                maxClassStateRP = 0 // 기본값 할당
+                maxProbStateRP = 0f // 기본값 할당
+                Log.d("RPResult", "Fail")
             }
 
             // 분류 결과 로그로 출력
@@ -156,19 +208,24 @@ fun MeasurementScreen(
     }
     DisposableEffect(Unit) {
         onDispose {
-            classifier.finish()
+            classifierMR.finish()
+            classifierRP.finish()
         }
     }
 
     Column(modifier = Modifier
         .fillMaxSize()
-        .background(MaterialTheme.colorScheme.secondary)
-        .padding(16.dp)
+        .background(Color(0xFFFFEBEE))
+        .padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Row(
         ){
             Card(
-                modifier = Modifier.fillMaxWidth(0.5f).weight(1f),
+                modifier = Modifier
+                    .fillMaxWidth(0.5f)
+                    .weight(1f),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(
@@ -191,7 +248,7 @@ fun MeasurementScreen(
                 modifier = Modifier.weight(1f)
             ) {
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().height(81.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(
@@ -201,9 +258,9 @@ fun MeasurementScreen(
                         Text("${"%.2f".format(velV)} m/s", style = MaterialTheme.typography.bodyMedium)
                     }
                 }
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().height(81.dp),
                     onClick = { reset = true },
                     colors = if (!reset) CardDefaults.cardColors(containerColor = Color.Red)
                     else CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -218,28 +275,70 @@ fun MeasurementScreen(
             }
         }
         Spacer(modifier = Modifier.height(4.dp))
+        Row{
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth(0.5f)
+                    .weight(1f),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(10.dp)
+                ) {
+                    Text("Current Motion", style = MaterialTheme.typography.bodyLarge)
+                    Text("Class $maxClassStateMR: $motionName", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth(0.5f)
+                    .weight(1f),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(10.dp)
+                ) {
+                    Text("Risk Prediction", style = MaterialTheme.typography.bodyLarge)
+                    Text("Risk: ${"%.2f".format(kotlin.math.abs(maxProbStateRP))}",
+                        style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
         LineChartComposable("Accelerometer", accChartDataX, accChartDataY, accChartDataZ)
         Spacer(modifier = Modifier.height(4.dp))
         LineChartComposable("Gyroscope", gyroChartDataX, gyroChartDataY, gyroChartDataZ)
-        Button(onClick = {
-            isRecording = !isRecording
-            if (isRecording) {
-                // 데이터 기록을 시작합니다. 이제 LaunchedEffect가 데이터를 저장하기 시작합니다.
-                Log.d("MeasurementScreen", "Recording started")
-            } else {
-                // 데이터 기록을 중지합니다. LaunchedEffect는 더 이상 데이터를 저장하지 않습니다.
-                // 저장된 데이터를 CSV 파일로 내보냅니다.
-                bluetoothViewModel.stopRecordingAndExportToCSV(context) { filePath ->
-                    Toast.makeText(context, "Data saved to $filePath", Toast.LENGTH_LONG).show()
-                    Log.d("MeasurementScreen", "Sensor data saved: $filePath")
+        Spacer(modifier = Modifier.height(10.dp))
+        Card(
+            modifier = Modifier.padding(30.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        ){
+            RecordButton(isRecording = isRecording, onRecordClick = {
+                isRecording = !isRecording
+                if (isRecording) {
+                    // 데이터 기록을 시작합니다. 이제 LaunchedEffect가 데이터를 저장하기 시작합니다.
+                    Log.d("MeasurementScreen", "Recording started")
+                } else {
+                    // 데이터 기록을 중지합니다. LaunchedEffect는 더 이상 데이터를 저장하지 않습니다.
+                    // 저장된 데이터를 CSV 파일로 내보냅니다.
+                    bluetoothViewModel.stopRecordingAndExportToCSV(context) { filePath ->
+                        Toast.makeText(context, "Data saved to $filePath", Toast.LENGTH_LONG).show()
+                        Log.d("MeasurementScreen", "Sensor data saved: $filePath")
+                    }
                 }
-            }
-        }) {
-            Text(if (isRecording) "Stop Recording" else "Start Recording")
+            })
         }
-        Button(onClick = { bluetoothViewModel.fetchAndLogSensorData() }) {
-            Text("Log Sensor Data")
-        }
-        Text("Predicted Class: $maxClassState, Probability: ${"%.2f".format(maxProbState)}")
+    }
+}
+
+@Composable
+fun RecordButton(isRecording: Boolean, onRecordClick: () -> Unit) {
+    IconButton(onClick = onRecordClick) {
+        Icon(
+            painter = painterResource(id = if (isRecording) R.drawable.ic_stop else R.drawable.ic_record),
+            contentDescription = if (isRecording) "Stop Recording" else "Start Recording",
+            tint = if (isRecording) Color.Black else Color.Red
+        )
     }
 }

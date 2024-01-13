@@ -1,12 +1,16 @@
 package com.example.imu_demo.presentation
 
+import android.util.Log
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,6 +22,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import com.example.imu_demo.R
 
 import com.example.imu_demo.domain.BluetoothDevice
 import com.example.imu_demo.ui.theme.IMU_DemoTheme
@@ -33,6 +39,7 @@ fun ScanScreen(
     onDeviceDisconnect: (BluetoothDevice) -> Unit
 ) {
     val applicationContext = LocalContext.current
+    var isScanning by remember { mutableStateOf(false) }
 
     LaunchedEffect(key1 = state.errorMessage) {
         state.errorMessage?.let {message ->
@@ -95,6 +102,7 @@ fun ScanScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .background(Color(0xFFC4DFDF))
             ) {
                 BluetoothDeviceList(
                     pairedDevices = state.pairedDevices,
@@ -108,15 +116,30 @@ fun ScanScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceAround
                 ) {
-                    Button(onClick = onStartScan) {
-                        Text(text = "Start scan")
-                    }
-                    Button(onClick = onStopScan) {
-                        Text(text = "Stop scan")
-                    }
+                    ScanButton(isScanning = isScanning, onScanClick = {
+                        isScanning = !isScanning
+                        if (isScanning)
+                        {
+                            onStartScan()
+                        } else
+                        {
+                            onStopScan()
+                        }
+                    })
                 }
             }
         }
+    }
+}
+
+@Composable
+fun ScanButton(isScanning: Boolean, onScanClick: () -> Unit) {
+    IconButton(onClick = onScanClick) {
+        Icon(
+            painter = painterResource(id = if (isScanning) R.drawable.ic_ble_stop else R.drawable.ic_ble_scan),
+            contentDescription = if (isScanning) "Stop Scanning" else "Start Scanning",
+            tint = if (isScanning) Color.Black else Color.Blue
+        )
     }
 }
 

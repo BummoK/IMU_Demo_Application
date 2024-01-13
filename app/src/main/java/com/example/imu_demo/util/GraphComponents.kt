@@ -1,10 +1,12 @@
 package com.example.imu_demo.util
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,10 +28,12 @@ fun LineChartComposable(
     dataY: List<Entry>,
     dataZ: List<Entry>
 ) {
-
     // 가속도 데이터에 대한 차트
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(10.dp)) {
+    Card(modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Column(
+            modifier = Modifier.padding(10.dp)
+            ) {
             Text(title, style = MaterialTheme.typography.bodyLarge)
             AndroidView(
                 modifier = Modifier

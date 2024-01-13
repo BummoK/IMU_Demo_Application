@@ -1,5 +1,6 @@
 package com.example.imu_demo.navigations
 
+import WelcomeScreen
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Icon
@@ -33,9 +34,13 @@ fun NavigationGraph(navController: NavHostController) {
     val state by viewModel.state.collectAsState()
     NavHost(
         navController = navController,
-        startDestination = BottomNavItem.Scan.screenRoute
+        startDestination = "Welcome"
 
     ){
+        composable("Welcome") { // 스플래시 화면 추가
+            WelcomeScreen(navController)
+        }
+
         composable(BottomNavItem.Scan.screenRoute){
             ScanScreen(
                 state = state,
