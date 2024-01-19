@@ -51,13 +51,13 @@ class RiskPrediction(private val context: Context) {
         val probabilities = getProbabilities(result[0])
 
         // 로그로 확률 값 출력
-        Log.d("RiskPrediction", "Result: ${result[0].joinToString(", ")}")
+//        Log.d("RiskPrediction", "Result: ${result[0].joinToString(", ")}")
 
         return probabilities
     }
 
     private fun convertToByteBuffer(data: Array<FloatArray>): ByteBuffer? {
-        val byteBuffer = ByteBuffer.allocateDirect(data.size * data[0].size * 6)
+        val byteBuffer = ByteBuffer.allocateDirect(data.size * data[0].size * 4)
         byteBuffer.order(ByteOrder.nativeOrder())
         for (i in data.indices) {
             for (j in data[i].indices) {

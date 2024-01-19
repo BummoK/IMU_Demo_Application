@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
 import com.example.imu_demo.navigations.BottomNavigation
 import com.example.imu_demo.navigations.NavigationGraph
+import com.example.imu_demo.navigations.currentRoute
 import com.example.imu_demo.ui.theme.IMU_DemoTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -81,13 +82,18 @@ class MainActivity : ComponentActivity() {
         setContent {
             IMU_DemoTheme {
                 val navController = rememberNavController()
-
+                val currentRoute = navController.currentRoute()
+                val showBottomNav = currentRoute != "Welcome"
 
                 Surface(
                     color = MaterialTheme.colorScheme.background
                 ) {
                     Scaffold(
-                        bottomBar = { BottomNavigation(navController = navController)}
+                        bottomBar = {
+                            if (showBottomNav) {
+                                BottomNavigation(navController = navController)
+                            }
+                        }
                     ) {
                         Box(Modifier.padding(it)){
                             NavigationGraph(navController = navController)

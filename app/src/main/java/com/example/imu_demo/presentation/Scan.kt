@@ -4,6 +4,7 @@ import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -40,6 +41,15 @@ fun ScanScreen(
 ) {
     val applicationContext = LocalContext.current
     var isScanning by remember { mutableStateOf(false) }
+
+    val darkTheme = isSystemInDarkTheme()
+    val backgroundColor = if (darkTheme) {
+        // 다크 모드일 때 사용할 색상
+        Color(0xFF303030) // 예시 색상, 필요에 따라 변경 가능
+    } else {
+        // 라이트 모드일 때 사용할 색상
+        Color(0xFFC4DFDF)
+    }
 
     LaunchedEffect(key1 = state.errorMessage) {
         state.errorMessage?.let {message ->
@@ -102,7 +112,7 @@ fun ScanScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xFFC4DFDF))
+                    .background(backgroundColor)
             ) {
                 BluetoothDeviceList(
                     pairedDevices = state.pairedDevices,

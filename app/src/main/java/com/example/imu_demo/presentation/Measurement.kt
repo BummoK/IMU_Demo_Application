@@ -1,20 +1,23 @@
 package com.example.imu_demo.presentation
 
+import android.os.Build
 import android.util.Log
 import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -36,11 +39,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.ImageLoader
+import coil.compose.rememberAsyncImagePainter
+import coil.decode.GifDecoder
+import coil.decode.ImageDecoderDecoder
 import com.example.imu_demo.R
 import com.example.imu_demo.data.dao.SensorData
 import com.example.imu_demo.util.BluetoothViewModel
@@ -53,7 +61,6 @@ import com.example.imu_demo.util.fallDetection
 import com.example.imu_demo.util.updateChartData
 
 import com.github.mikephil.charting.data.*
-import java.lang.Math.abs
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -61,6 +68,15 @@ import java.lang.Math.abs
 fun MeasurementScreen(
     bluetoothViewModel: BluetoothViewModel = hiltViewModel()
 ) {
+    val darkTheme = isSystemInDarkTheme()
+    val backgroundColor = if (darkTheme) {
+        // 다크 모드일 때 사용할 색상
+        Color(0xFF303030) // 예시 색상, 필요에 따라 변경 가능
+    } else {
+        // 라이트 모드일 때 사용할 색상
+        Color(0xFFFFEBEE)
+    }
+
     val context = LocalContext.current
     var isRecording by remember { mutableStateOf(false) }
     // 낙상검출 알고리즘 파라미터
@@ -69,28 +85,88 @@ fun MeasurementScreen(
     var gyro by remember { mutableFloatStateOf(0.0F) }
     var dect by remember { mutableStateOf(false) }
     var reset by remember { mutableStateOf(true) }
+    var motionreset by remember { mutableStateOf(true) }
+
+    val imageLoader = ImageLoader.Builder(LocalContext.current)
+        .components {
+            if (Build.VERSION.SDK_INT >= 28) {
+                add(ImageDecoderDecoder.Factory())
+            } else {
+                add(GifDecoder.Factory())
+            }
+        }.build()
 
     val sensorDataBufferMR = remember { Array(8) { MutableList(60) { 0f } } }
     val sensorDataBufferRP = remember { Array(8) { MutableList(15) { 0f } } }
     val classifierMR = remember { MotionRecognition(context).apply { init() } }
     val classifierRP = remember { RiskPrediction(context).apply { init() } }
 
-    var maxClassStateMR by remember { mutableIntStateOf(0) } // 클래스의 초기값은 0
+    var maxClassStateMR by remember { mutableIntStateOf(-1) } // 클래스의 초기값은 0
     var maxProbStateMR by remember { mutableFloatStateOf(0f) } // 확률의 초기값은 0f
+
+    var maxFallClassStateMR by remember { mutableIntStateOf(-1) } // 클래스의 초기값은 0
+
     var maxClassStateRP by remember { mutableIntStateOf(0) } // 클래스의 초기값은 0
     var maxProbStateRP by remember { mutableFloatStateOf(0f) } // 확률의 초기값은 0f
 
     val motionName = when (maxClassStateMR) {
-        1 -> "서있기"
-        2 -> "앉았다 일어서기"
-        3 -> "보행"
-        4 -> "점프"
-        5 -> "전방낙상"
-        6 -> "후방낙상"
-        7 -> "측방낙상"
+        0 -> "서있기"
+        1 -> "앉았다 일어서기"
+        2 -> "보행"
+        3 -> "점프"
+        4 -> "전방낙상"
+        5 -> "후방낙상"
+        6 -> "측방낙상"
         else -> "알 수 없음"
     }
 
+    val fallMotionName = when (maxFallClassStateMR) {
+        4 -> "전방낙상"
+        5 -> "후방낙상"
+        6 -> "측방낙상"
+        else -> "알 수 없음"
+    }
+
+    val displayedMotion = if (motionreset) {
+        when (maxClassStateMR) {
+            0 -> "stand"
+            1 -> "sit_to_stand"
+            2 -> "walking"
+            3 -> "jump"
+            4 -> "forward_fall"
+            5 -> "backward_fall"
+            6 -> "lateral_fall"
+            else -> "unknown"
+        }
+    } else {
+        if (maxClassStateMR >= 4) {
+            motionreset = false
+            maxFallClassStateMR = maxClassStateMR
+        }
+        when (maxFallClassStateMR) {
+            4 -> "forward_fall"
+            5 -> "backward_fall"
+            6 -> "lateral_fall"
+            else -> "unknown"
+        }
+    }
+
+    val imageResource01 = when (displayedMotion) {
+        "stand" -> R.drawable.stand
+        "sit_to_stand" -> R.drawable.sit_to_stand
+        "walking" -> R.drawable.walking
+        "jump" -> R.drawable.jump
+        "forward_fall" -> R.drawable.forward_fall
+        "backward_fall" -> R.drawable.backward_fall
+        "lateral_fall" -> R.drawable.lateral_fall
+        else -> R.drawable.unknown // default or unknown image
+    }
+
+    val imageResource02 = when {
+        kotlin.math.abs(maxProbStateRP) < 25 -> R.drawable.safe
+        kotlin.math.abs(maxProbStateRP) < 50 -> R.drawable.warning
+        else -> R.drawable.danger
+    }
 
     val timerValue by bluetoothViewModel.timerValue.collectAsState()
     val accXValue by bluetoothViewModel.accXValue.collectAsState()
@@ -117,7 +193,9 @@ fun MeasurementScreen(
             accZ = accZValue ?: 0f,
             gyroX = gyroXValue ?: 0f,
             gyroY = gyroYValue ?: 0f,
-            gyroZ = gyroZValue ?: 0f
+            gyroZ = gyroZValue ?: 0f,
+            motion = maxClassStateMR,
+            risk = kotlin.math.abs(maxProbStateRP)
         )
 
         if (isRecording) {
@@ -142,6 +220,10 @@ fun MeasurementScreen(
         gyro = newGyro
 
         if (dect) reset=false
+        if (maxClassStateMR >= 4) {
+            motionreset = false
+            maxFallClassStateMR = maxClassStateMR
+        }
 
         // 버퍼에 데이터 추가
         val sensorValues = arrayOf(accXValue, accYValue, accZValue,
@@ -157,9 +239,8 @@ fun MeasurementScreen(
 
         // 버퍼가 가득 찼을 때 처리
         if (sensorDataBufferMR[0].size == 60) {
-            Log.d("Buffer", "full")
+//            Log.d("Buffer", "full")
             val modelInputDataMR = DataPreprocessorMR.prepareModelInputMR(sensorDataBufferMR)
-
 
             val classificationMR = classifierMR.classify(modelInputDataMR)
 
@@ -169,20 +250,14 @@ fun MeasurementScreen(
             if (maxEntryMR != null) {
                 maxClassStateMR = maxEntryMR.key
                 maxProbStateMR = maxEntryMR.value
-                Log.d("MRResult", "success")
             } else {
-                maxClassStateMR = 0 // 기본값 할당
+                maxClassStateMR = -1 // 기본값 할당
                 maxProbStateMR = 0f // 기본값 할당
-                Log.d("MRResult", "Fail")
             }
-
-            // 분류 결과 로그로 출력
-//            Log.d("MeasurementScreen", "Class: $maxClassState, Probability: $maxProbState")
-
         }
 
         if (sensorDataBufferRP[0].size == 15) {
-            Log.d("Buffer", "full")
+//            Log.d("Buffer", "full")
             val modelInputDataRP = DataPreprocessorRP.prepareModelInputRP(sensorDataBufferRP)
 
 
@@ -194,16 +269,10 @@ fun MeasurementScreen(
             if (maxEntryRP != null) {
                 maxClassStateRP = maxEntryRP.key
                 maxProbStateRP = maxEntryRP.value
-                Log.d("RPResult", "success")
             } else {
                 maxClassStateRP = 0 // 기본값 할당
                 maxProbStateRP = 0f // 기본값 할당
-                Log.d("RPResult", "Fail")
             }
-
-            // 분류 결과 로그로 출력
-//            Log.d("MeasurementScreen", "Class: $maxClassState, Probability: $maxProbState")
-
         }
     }
     DisposableEffect(Unit) {
@@ -215,7 +284,7 @@ fun MeasurementScreen(
 
     Column(modifier = Modifier
         .fillMaxSize()
-        .background(Color(0xFFFFEBEE))
+        .background(backgroundColor)
         .padding(16.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
@@ -280,13 +349,31 @@ fun MeasurementScreen(
                 modifier = Modifier
                     .fillMaxWidth(0.5f)
                     .weight(1f),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                onClick = { motionreset = true },
+                colors = if (!motionreset) CardDefaults.cardColors(containerColor = Color.Red)
+                else CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(
                     modifier = Modifier.padding(10.dp)
                 ) {
                     Text("Current Motion", style = MaterialTheme.typography.bodyLarge)
-                    Text("Class $maxClassStateMR: $motionName", style = MaterialTheme.typography.bodySmall)
+                    Text("Class ${if (motionreset) "$maxClassStateMR: $motionName" 
+                    else "$maxFallClassStateMR: $fallMotionName"}", style = MaterialTheme.typography.bodySmall)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    // Box를 추가하여 이미지를 중앙에 배치
+                    Box(
+                        modifier = Modifier
+                            .width(100.dp) // Box의 너비 설정
+                            .height(75.dp) // Box의 높이 설정
+                            .align(Alignment.CenterHorizontally) // Column 내에서 수평 중앙 정렬
+                    ) {
+                        Image(
+                            painter = rememberAsyncImagePainter(imageResource01, imageLoader),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(), // 이미지를 Box의 크기에 맞춤
+                            alignment = Alignment.Center // 이미지 내부에서의 중앙 정렬
+                        )
+                    }
                 }
             }
             Spacer(modifier = Modifier.width(10.dp))
@@ -302,6 +389,21 @@ fun MeasurementScreen(
                     Text("Risk Prediction", style = MaterialTheme.typography.bodyLarge)
                     Text("Risk: ${"%.2f".format(kotlin.math.abs(maxProbStateRP))}",
                         style = MaterialTheme.typography.bodySmall)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    // Box를 추가하여 이미지를 중앙에 배치
+                    Box(
+                        modifier = Modifier
+                            .width(100.dp) // Box의 너비 설정
+                            .height(75.dp) // Box의 높이 설정
+                            .align(Alignment.CenterHorizontally) // Column 내에서 수평 중앙 정렬
+                    ) {
+                        Image(
+                            painter = rememberAsyncImagePainter(imageResource02, imageLoader),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(), // 이미지를 Box의 크기에 맞춤
+                            alignment = Alignment.Center // 이미지 내부에서의 중앙 정렬
+                        )
+                    }
                 }
             }
         }
@@ -309,9 +411,9 @@ fun MeasurementScreen(
         LineChartComposable("Accelerometer", accChartDataX, accChartDataY, accChartDataZ)
         Spacer(modifier = Modifier.height(4.dp))
         LineChartComposable("Gyroscope", gyroChartDataX, gyroChartDataY, gyroChartDataZ)
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(4.dp))
         Card(
-            modifier = Modifier.padding(30.dp),
+            modifier = Modifier.padding(5.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         ){
             RecordButton(isRecording = isRecording, onRecordClick = {

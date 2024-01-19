@@ -8,11 +8,12 @@ import java.io.IOException
 
 object CSVFileHandler {
     fun saveDataToCSV(context: Context, sensorDataList: List<SensorData>, fileName: String) {
-        val csvHeader = "Time, AccX, AccY, AccZ, GyroX, GyroY, GyroZ\n"
+        val csvHeader = "Time, AccX, AccY, AccZ, GyroX, GyroY, GyroZ, Motion, Risk\n"
         val stringBuilder = StringBuilder(csvHeader)
 
         sensorDataList.forEach { data ->
-            stringBuilder.append("${data.time}, ${data.accX}, ${data.accY}, ${data.accZ}, ${data.gyroX}, ${data.gyroY}, ${data.gyroZ}\n")
+            stringBuilder.append("${data.time}, ${data.accX}, ${data.accY}, ${data.accZ}, " +
+                    "${data.gyroX}, ${data.gyroY}, ${data.gyroZ}, ${data.motion}, ${data.risk}\n")
         }
 
         // Downloads 디렉토리 내에 Experiments 폴더 생성

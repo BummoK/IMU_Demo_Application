@@ -13,5 +13,7 @@ data class SensorData(
     val accZ: Float,
     val gyroX: Float,
     val gyroY: Float,
-    val gyroZ: Float
+    val gyroZ: Float,
+    val motion: Int,
+    val risk: Float
 )

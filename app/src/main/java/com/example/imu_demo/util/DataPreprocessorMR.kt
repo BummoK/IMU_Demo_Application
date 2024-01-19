@@ -1,5 +1,7 @@
 package com.example.imu_demo.util
 
+import android.util.Log
+
 class DataPreprocessorMR {
     companion object {
         // 모델 입력 데이터 준비
@@ -13,10 +15,6 @@ class DataPreprocessorMR {
                     inputData[i][j] = buffer[j][i]
                 }
             }
-
-//            inputData.forEachIndexed { index, data ->
-//                Log.d("ModelInputData", "Time step $index: ${data.joinToString(", ")}")
-//            }
 
             return inputData
         }

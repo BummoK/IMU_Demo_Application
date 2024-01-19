@@ -29,7 +29,7 @@ object AppModule {
         return Room.databaseBuilder(
             appContext,
             AppDatabase::class.java,
-            "your_database_name"
+            "IMU_database_ver01"
         ).build()
     }
 

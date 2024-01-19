@@ -27,11 +27,13 @@ import com.example.imu_demo.presentation.AnalysisScreen
 import com.example.imu_demo.util.BluetoothViewModel
 import com.example.imu_demo.presentation.MeasurementScreen
 import com.example.imu_demo.presentation.ScanScreen
+import com.example.imu_demo.util.AnalysisViewModel
 
 @Composable
 fun NavigationGraph(navController: NavHostController) {
-    val viewModel = hiltViewModel<BluetoothViewModel>()
-    val state by viewModel.state.collectAsState()
+    val bluetoothViewModel = hiltViewModel<BluetoothViewModel>()
+    val analysisViewModel = hiltViewModel<AnalysisViewModel>()
+    val state by bluetoothViewModel.state.collectAsState()
     NavHost(
         navController = navController,
         startDestination = "Welcome"
@@ -44,21 +46,21 @@ fun NavigationGraph(navController: NavHostController) {
         composable(BottomNavItem.Scan.screenRoute){
             ScanScreen(
                 state = state,
-                onStartScan = viewModel::startScan,
-                onStopScan = viewModel::stopScan,
-                onDeviceClick = viewModel::connectToDevice,
-                onDeviceDisconnect = viewModel::disconnectFromDevice
+                onStartScan = bluetoothViewModel::startScan,
+                onStopScan = bluetoothViewModel::stopScan,
+                onDeviceClick = bluetoothViewModel::connectToDevice,
+                onDeviceDisconnect = bluetoothViewModel::disconnectFromDevice
                 )
         }
 
         composable(BottomNavItem.Measurement.screenRoute){
             MeasurementScreen(
-                bluetoothViewModel = viewModel,
+                bluetoothViewModel = bluetoothViewModel,
             )
         }
 
         composable(BottomNavItem.Analysis.screenRoute){
-            AnalysisScreen()
+            AnalysisScreen(viewModel = analysisViewModel)
         }
     }
 }
@@ -110,4 +112,10 @@ fun BottomNavigation(navController: NavHostController
             )
         }
     }
+}
+
+@Composable
+fun NavHostController.currentRoute(): String? {
+    val navBackStackEntry by currentBackStackEntryAsState()
+    return navBackStackEntry?.destination?.route
 }
