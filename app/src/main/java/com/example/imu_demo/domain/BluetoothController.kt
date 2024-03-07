@@ -19,6 +19,7 @@ interface BluetoothController {
     val gyroYValueStateFlow: StateFlow<Float?>
     val gyroZValueStateFlow: StateFlow<Float?>
     val batteryValueStateFlow: StateFlow<Float?>
+    val alarmInfoValueStateFlow: StateFlow<Int?>
 
     fun startDiscovery()
     fun stopDiscovery()

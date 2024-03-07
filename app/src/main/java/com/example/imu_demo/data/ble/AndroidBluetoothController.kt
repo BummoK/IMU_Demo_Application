@@ -10,6 +10,7 @@ import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
+import android.content.ContentValues
 import android.content.Context
 import android.content.IntentFilter
 import android.content.pm.PackageManager
@@ -98,9 +99,14 @@ class AndroidBluetoothController(
     private val _batteryValueStateFlow = MutableStateFlow<Float?>(null)
     override val batteryValueStateFlow: StateFlow<Float?> = _batteryValueStateFlow
 
+    private val _alarmInfoValueStateFlow = MutableStateFlow<Int?>(null)
+    override val alarmInfoValueStateFlow: StateFlow<Int?> = _alarmInfoValueStateFlow
+
     // UUID 정의
-    private val serviceUUID = UUID.fromString("ABF0E000-B597-4BE0-B869-6054B7ED0CE3")
-    private val imuDataCharUUID = UUID.fromString("ABF0E001-B597-4BE0-B869-6054B7ED0CE3") // 수정된 특성 UUID
+    private val serviceUUID = UUID.fromString("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
+    private val imuDataCharUUID = UUID.fromString("6E400003-B5A3-F393-E0A9-E50E24DCCA9E") // 수정된 특성 UUID
+//    private var serviceUUID: UUID? = null
+//    private var imuDataCharUUID: UUID? = null
 
     // 특성 참조 추가
     private var timerChar: BluetoothGattCharacteristic? = null
@@ -111,6 +117,8 @@ class AndroidBluetoothController(
     private var gyroYChar: BluetoothGattCharacteristic? = null
     private var gyroZChar: BluetoothGattCharacteristic? = null
     private var tempChar: BluetoothGattCharacteristic? = null
+
+    var time = 0L
 
     init {
         updatePairedDevices()
@@ -205,9 +213,12 @@ class AndroidBluetoothController(
                             val descriptor = characteristic.getDescriptor(
                                 UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
                             )
-                            descriptor?.let {
-                                it.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                                gatt.writeDescriptor(it)
+                            descriptor?.let { descriptor ->
+                                descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+                                val result = gatt.writeDescriptor(descriptor)
+                                if (!result) {
+                                    Log.w(TAG, "Failed to write descriptor")
+                                }
                             }
                         }
                     }
@@ -224,43 +235,73 @@ class AndroidBluetoothController(
             val data = characteristic.value
 
             // 받아온 데이터의 바이트 수를 로그로 출력
-//            Log.d(TAG, "Received data length: ${data.size} bytes")
+            Log.d(TAG, "Received data length: ${data.size} bytes")
 
             if (characteristic.uuid == imuDataCharUUID) {
                 val dataString = data.joinToString(", ") { it.toString() }
-//                Log.d(TAG, "Received data: $dataString")
-                parseIMUData(characteristic.value)
+                Log.d(TAG, "Received data: $dataString")
+                parseIMUDataSW(characteristic.value)
+            }
+            else {
+                Log.d(TAG, "UUID was not matched")
             }
         }
 
-        private fun parseIMUData(data: ByteArray) {
+        fun parseIMUDataSW(data: ByteArray) {
+
             val buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
+            val bufferLength = data.size
+            Log.d(ContentValues.TAG, "bufferLength: $bufferLength")
 
             val startMarker = String(data.sliceArray(0..1), Charsets.UTF_8)
-            val endMarker = String(data.sliceArray(15..16), Charsets.UTF_8)
+//            Log.d(ContentValues.TAG, "startMarker: $startMarker")
+//
+//            val frameNumber = ByteBuffer.wrap(data.sliceArray(2..3)).order(ByteOrder.LITTLE_ENDIAN).short.toInt()
+//            Log.d(ContentValues.TAG, "frameNumber: $frameNumber")
+//
+            val seqNumber = ByteBuffer.wrap(data.sliceArray(4..5)).order(ByteOrder.LITTLE_ENDIAN).short.toInt()
+//            val seqNumberRev = Integer.toHexString(seqNumber)
+//            Log.d(ContentValues.TAG, "seqNumber: $seqNumber")
+//            Log.d(ContentValues.TAG, "seqNumberRev: $seqNumberRev")
 
-            if (startMarker == "ST" && endMarker == "ED") {
-//                Log.e(TAG, "parsing success")
-                val time = ByteBuffer.wrap(data.sliceArray(4..7)).order(ByteOrder.LITTLE_ENDIAN).getInt().toLong()
-                val accX = byteToFloat(buffer.get(8), -16.0f, 16.0f)    // 변환된 가속도 X
-                val accY = byteToFloat(buffer.get(9), -16.0f, 16.0f)    // 변환된 가속도 Y
-                val accZ = byteToFloat(buffer.get(10), -16.0f, 16.0f)    // 변환된 가속도 Z
-                val gyroX = byteToFloat(buffer.get(11), -2000f, 2000f) // 변환된 자이로스코프 X
-                val gyroY = byteToFloat(buffer.get(12), -2000f, 2000f) // 변환된 자이로스코프 Y
-                val gyroZ = byteToFloat(buffer.get(13), -2000f, 2000f) // 변환된 자이로스코프 Z
-                val battery = byteToFloat(buffer.get(14), -0f, 100f)      // 변환된 온도
+            val alarmInfo = seqNumber/4096
+            Log.d(ContentValues.TAG, "alarmInfo: $alarmInfo")
 
-                // 이제 각 값들을 StateFlow에 업데이트
-                _timerValueStateFlow.value = time
-                _accXValueStateFlow.value = accX
-                _accYValueStateFlow.value = accY
-                _accZValueStateFlow.value = accZ
-                _gyroXValueStateFlow.value = gyroX
-                _gyroYValueStateFlow.value = gyroY
-                _gyroZValueStateFlow.value = gyroZ
-                _batteryValueStateFlow.value = battery
+            if (startMarker == "SD") {
+                var dataBlockNum = 0
+                when (bufferLength) {
+                    130 -> {
+                        dataBlockNum = 9
+                    }
+                    144 -> {
+                        dataBlockNum = 10
+                    }
+                    else -> {
+                        Log.e(ContentValues.TAG, "Number of data is lack")
+                    }
+                }
+                for (i in 0 until dataBlockNum) {
+                    val accX = convertBytesToInt(buffer.get(6+14*i), buffer.get(7+14*i))/8192.0
+                    val accY = convertBytesToInt(buffer.get(8+14*i), buffer.get(9+14*i))/8192.0
+                    val accZ = convertBytesToInt(buffer.get(10+14*i), buffer.get(11+14*i))/8192.0
+                    val gyroX = convertBytesToInt(buffer.get(12+14*i), buffer.get(13+14*i))/65.536
+                    val gyroY = convertBytesToInt(buffer.get(14+14*i), buffer.get(15+14*i))/65.536
+                    val gyroZ = convertBytesToInt(buffer.get(16+14*i), buffer.get(17+14*i))/65.536
+
+                    // 이제 각 값들을 StateFlow에 업데이트
+                    _timerValueStateFlow.value = time
+                    _accXValueStateFlow.value = accX.toFloat()
+                    _accYValueStateFlow.value = accY.toFloat()
+                    _accZValueStateFlow.value = accZ.toFloat()
+                    _gyroXValueStateFlow.value = gyroX.toFloat()
+                    _gyroYValueStateFlow.value = gyroY.toFloat()
+                    _gyroZValueStateFlow.value = gyroZ.toFloat()
+                    _alarmInfoValueStateFlow.value = alarmInfo
+                    time += 1L
+                }
+
             } else {
-                Log.e(TAG, "Error parsing IMU data")
+                Log.e(ContentValues.TAG, "Error parsing IMU data")
             }
         }
 
@@ -269,7 +310,64 @@ class AndroidBluetoothController(
             return minVal + (maxVal - minVal) * normalized
         }
     }
-    // 기타 필요한 메서드 및 처리 로직
+
+    private fun parseIMUDataYonsei(data: ByteArray) {
+        val buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
+
+        val startMarker = String(data.sliceArray(0..1), Charsets.UTF_8)
+        val endMarker = String(data.sliceArray(15..16), Charsets.UTF_8)
+
+        if (startMarker == "ST" && endMarker == "ED") {
+//                Log.e(TAG, "parsing success")
+            val time = ByteBuffer.wrap(data.sliceArray(4..7)).order(ByteOrder.LITTLE_ENDIAN).getInt().toLong()
+            val accX = byteToFloat(buffer.get(8), -16.0f, 16.0f)    // 변환된 가속도 X
+            val accY = byteToFloat(buffer.get(9), -16.0f, 16.0f)    // 변환된 가속도 Y
+            val accZ = byteToFloat(buffer.get(10), -16.0f, 16.0f)    // 변환된 가속도 Z
+            val gyroX = byteToFloat(buffer.get(11), -2000f, 2000f) // 변환된 자이로스코프 X
+            val gyroY = byteToFloat(buffer.get(12), -2000f, 2000f) // 변환된 자이로스코프 Y
+            val gyroZ = byteToFloat(buffer.get(13), -2000f, 2000f) // 변환된 자이로스코프 Z
+            val battery = byteToFloat(buffer.get(14), -0f, 100f)      // 변환된 온도
+
+            // 이제 각 값들을 StateFlow에 업데이트
+            _timerValueStateFlow.value = time
+            _accXValueStateFlow.value = accX
+            _accYValueStateFlow.value = accY
+            _accZValueStateFlow.value = accZ
+            _gyroXValueStateFlow.value = gyroX
+            _gyroYValueStateFlow.value = gyroY
+            _gyroZValueStateFlow.value = gyroZ
+            _batteryValueStateFlow.value = battery
+        } else {
+            Log.e(TAG, "Error parsing IMU data")
+        }
+    }
+
+    private fun byteToFloat(byteValue: Byte, minVal: Float, maxVal: Float): Float {
+        val normalized = (byteValue.toInt() and 0xFF) / 255f
+        return minVal + (maxVal - minVal) * normalized
+    }
+
+    private fun convertBytesToInt(byte1: Byte, byte2: Byte): Int {
+        // 바이트 배열로 변환
+        var signedIntValue = 0
+        val byteArray = byteArrayOf(byte1, byte2)
+
+        // Little-endian 형식의 2바이트를 16진수로 읽어옴
+        val intValue = (byteArray[1].toInt() and 0xFF shl 8) or (byteArray[0].toInt() and 0xFF)
+
+        if (byte2 >= 0) {
+            signedIntValue = intValue
+        }
+        else {
+            signedIntValue = intValue - 65536
+        }
+
+        Log.d(ContentValues.TAG, "byte1: $byte1")
+        Log.d(ContentValues.TAG, "byte2: $byte2")
+        Log.d(ContentValues.TAG, "intValue: $signedIntValue")
+
+        return signedIntValue
+    }
 
     private fun updateDeviceConnectionStatus(deviceAddress: String, isConnected: Boolean) {
         _scannedDevices.update { devices ->
@@ -281,7 +379,6 @@ class AndroidBluetoothController(
                 }
             }
         }
-
         // 이와 유사하게 _pairedDevices 또는 _connectedDevices 업데이트
     }
 

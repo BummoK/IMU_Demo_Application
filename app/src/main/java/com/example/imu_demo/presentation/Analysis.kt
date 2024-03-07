@@ -20,6 +20,8 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -55,6 +57,8 @@ fun AnalysisScreen(viewModel: AnalysisViewModel) {
 
     // StateFlow를 collectAsState를 통해 Composable에 연결
     val selectedFileName by viewModel.selectedFileName.collectAsState()
+
+    val isButtonClicked = remember { mutableStateOf(false) }
 
     val darkTheme = isSystemInDarkTheme()
     val backgroundColor = if (darkTheme) {
@@ -114,6 +118,31 @@ fun AnalysisScreen(viewModel: AnalysisViewModel) {
             CustomTable()
             Text("  Risk", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
             RiskChartComposable(sensorDataList = sensorDataList)
+        }
+        IconButton(
+            onClick = {
+                // 버튼 클릭 시 parseIMUData 호출
+                isButtonClicked.value = true
+            }
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_insert_file), // 아이콘 리소스
+                contentDescription = "Button for parseIMUData" // 아이콘 설명
+            )
+        }
+        val data:ByteArray = byteArrayOf(
+            83, 68, 113, 0, -7, 3, 69, 2, 25, -1, -18, -34, -14, -1, 7, 0, 5, 0, -6, 3, 69, 2,
+            -2, -2, 34, -33, -23, -1, 4, 0, 7, 0, -5, 3, 40, 2, -10, -2, 35, -33, -20, -1, 14,
+            0, -7, -1, -4, 3, 28, 2, 10, -1, 8, -33, -19, -1, 22, 0, 7, 0, -3, 3, 65, 2, 42, -1,
+            -5, -34, -31, -1, 7, 0, 17, 0, -2, 3, 48, 2, 43, -1, 22, -33, -24, -1, 17, 0, 0, 0,
+            -1, 3, 59, 2, 21, -1, -10, -34, -18, -1, 5, 0, 13, 0, 0, 4, 57, 2, 35, -1, 35, -33,
+            -20, -1, 10, 0, 9, 0, 1, 4, 74, 2, 24, -1, -6, -34, -22, -1, 10, 0, 13, 0
+        )
+
+        if (isButtonClicked.value) {
+            // 버튼이 클릭되었으므로 false로 재설정
+            isButtonClicked.value = false
+            viewModel.parseIMUData(data) // 이곳에 parseIMUData 호출하는 코드 추가
         }
     }
 }

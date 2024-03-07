@@ -41,6 +41,7 @@ class BluetoothViewModel @Inject constructor(
     val gyroYValue = bluetoothController.gyroYValueStateFlow
     val gyroZValue = bluetoothController.gyroZValueStateFlow
     val batteryValue = bluetoothController.batteryValueStateFlow
+    val alarmInfoValue = bluetoothController.alarmInfoValueStateFlow
 
     private val _state = MutableStateFlow(BluetoothUiState())
     val state = combine(
