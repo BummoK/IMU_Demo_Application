@@ -12,6 +12,7 @@ import com.example.imu_demo.data.dao.SensorDataDao
 import com.example.imu_demo.domain.BluetoothController
 import com.example.imu_demo.domain.BluetoothDeviceDomain
 import com.example.imu_demo.domain.ConnectionResult
+import com.example.imu_demo.presentation.SensorChoice
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
@@ -44,6 +45,9 @@ class BluetoothViewModel @Inject constructor(
     val alarmInfoValue = bluetoothController.alarmInfoValueStateFlow
 
     private val _state = MutableStateFlow(BluetoothUiState())
+    var currentSensorChoice = MutableStateFlow(SensorChoice.SENSOR_1) // 예시
+
+
     val state = combine(
         bluetoothController.scannedDevices,
         bluetoothController.pairedDevices,

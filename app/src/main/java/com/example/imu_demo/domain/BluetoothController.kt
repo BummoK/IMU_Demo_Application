@@ -1,5 +1,6 @@
 package com.example.imu_demo.domain
 
+import com.example.imu_demo.presentation.SensorChoice
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -23,6 +24,7 @@ interface BluetoothController {
 
     fun startDiscovery()
     fun stopDiscovery()
+    fun allocateUUIDs()
     fun connectToDevice(device: BluetoothDeviceDomain): Flow<ConnectionResult> // 수정된 시그니처
     fun disconnectFromDevice(device: BluetoothDeviceDomain) // 추가된 메서드
     fun closeConnection()

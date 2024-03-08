@@ -143,6 +143,8 @@ fun AnalysisScreen(viewModel: AnalysisViewModel) {
             // 버튼이 클릭되었으므로 false로 재설정
             isButtonClicked.value = false
             viewModel.parseIMUData(data) // 이곳에 parseIMUData 호출하는 코드 추가
+            Log.d("ScanScreen", "Current choice updated to: ${currentChoiceState.value}")
+
         }
     }
 }

@@ -27,6 +27,7 @@ import com.example.imu_demo.presentation.AnalysisScreen
 import com.example.imu_demo.util.BluetoothViewModel
 import com.example.imu_demo.presentation.MeasurementScreen
 import com.example.imu_demo.presentation.ScanScreen
+import com.example.imu_demo.presentation.currentChoiceState
 import com.example.imu_demo.util.AnalysisViewModel
 
 @Composable
@@ -34,6 +35,7 @@ fun NavigationGraph(navController: NavHostController) {
     val bluetoothViewModel = hiltViewModel<BluetoothViewModel>()
     val analysisViewModel = hiltViewModel<AnalysisViewModel>()
     val state by bluetoothViewModel.state.collectAsState()
+
     NavHost(
         navController = navController,
         startDestination = "Welcome"
@@ -49,7 +51,8 @@ fun NavigationGraph(navController: NavHostController) {
                 onStartScan = bluetoothViewModel::startScan,
                 onStopScan = bluetoothViewModel::stopScan,
                 onDeviceClick = bluetoothViewModel::connectToDevice,
-                onDeviceDisconnect = bluetoothViewModel::disconnectFromDevice
+                onDeviceDisconnect = bluetoothViewModel::disconnectFromDevice,
+                currentChoiceState = currentChoiceState
                 )
         }
 

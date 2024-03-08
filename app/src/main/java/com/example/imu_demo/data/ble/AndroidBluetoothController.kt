@@ -15,9 +15,8 @@ import android.content.Context
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.util.Log
-import com.example.imu_demo.domain.BluetoothController
-import com.example.imu_demo.domain.BluetoothDeviceDomain
-import com.example.imu_demo.domain.ConnectionResult
+import androidx.compose.ui.graphics.Color
+
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -25,6 +24,12 @@ import kotlinx.coroutines.launch
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.UUID
+
+import com.example.imu_demo.domain.BluetoothController
+import com.example.imu_demo.domain.BluetoothDeviceDomain
+import com.example.imu_demo.domain.ConnectionResult
+import com.example.imu_demo.presentation.SensorChoice
+import com.example.imu_demo.presentation.currentChoiceState
 
 @SuppressLint("MissingPermission")
 class AndroidBluetoothController(
@@ -102,11 +107,9 @@ class AndroidBluetoothController(
     private val _alarmInfoValueStateFlow = MutableStateFlow<Int?>(null)
     override val alarmInfoValueStateFlow: StateFlow<Int?> = _alarmInfoValueStateFlow
 
-    // UUID 정의
-    private val serviceUUID = UUID.fromString("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
-    private val imuDataCharUUID = UUID.fromString("6E400003-B5A3-F393-E0A9-E50E24DCCA9E") // 수정된 특성 UUID
-//    private var serviceUUID: UUID? = null
-//    private var imuDataCharUUID: UUID? = null
+
+    var serviceUUID: UUID? = null
+    var imuDataCharUUID: UUID? = null
 
     // 특성 참조 추가
     private var timerChar: BluetoothGattCharacteristic? = null
@@ -130,6 +133,19 @@ class AndroidBluetoothController(
                 addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
             }
         )
+    }
+
+    override fun allocateUUIDs() {
+        this.serviceUUID = when (currentChoiceState.value) {
+            SensorChoice.SENSOR_1 -> null
+            SensorChoice.SENSOR_2 -> UUID.fromString("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
+            SensorChoice.SENSOR_3 -> UUID.fromString("ABF0E000-B597-4BE0-B869-6054B7ED0CE3")
+        }
+        this.imuDataCharUUID = when (currentChoiceState.value) {
+            SensorChoice.SENSOR_1 -> null
+            SensorChoice.SENSOR_2 -> UUID.fromString("6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
+            SensorChoice.SENSOR_3 -> UUID.fromString("ABF0E001-B597-4BE0-B869-6054B7ED0CE3")
+        }
     }
 
     override fun startDiscovery() {
@@ -191,7 +207,16 @@ class AndroidBluetoothController(
                 BluetoothProfile.STATE_CONNECTED -> {
                     updateDeviceConnectionStatus(deviceAddress, true)
                     gatt.discoverServices()
+                    allocateUUIDs()
                     Log.d(TAG, "Connected to the GATT server")
+                    Log.d(TAG, "Connected to the ${currentChoiceState.value}")
+                    Log.d(TAG, "UUID is $serviceUUID")
+
+                    when (currentChoiceState.value) {
+                        SensorChoice.SENSOR_1 -> Log.d(TAG, "Sensor 1")
+                        SensorChoice.SENSOR_2 -> Log.d(TAG, "Sensor 2")
+                        SensorChoice.SENSOR_3 -> Log.d(TAG, "Sensor 3")
+                    }
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     updateDeviceConnectionStatus(deviceAddress, false)
@@ -240,7 +265,15 @@ class AndroidBluetoothController(
             if (characteristic.uuid == imuDataCharUUID) {
                 val dataString = data.joinToString(", ") { it.toString() }
                 Log.d(TAG, "Received data: $dataString")
-                parseIMUDataSW(characteristic.value)
+
+//                parseIMUDataSW(characteristic.value)
+//                parseIMUDataYonsei(characteristic.value)
+
+                when (currentChoiceState.value) {
+                    SensorChoice.SENSOR_1 -> Log.e(TAG, "Not connect the BLE sensor")
+                    SensorChoice.SENSOR_2 -> parseIMUDataSW(characteristic.value) // 혹은 다른 함수로 변경
+                    SensorChoice.SENSOR_3 -> parseIMUDataYonsei(characteristic.value)
+                }
             }
             else {
                 Log.d(TAG, "UUID was not matched")
@@ -254,15 +287,7 @@ class AndroidBluetoothController(
             Log.d(ContentValues.TAG, "bufferLength: $bufferLength")
 
             val startMarker = String(data.sliceArray(0..1), Charsets.UTF_8)
-//            Log.d(ContentValues.TAG, "startMarker: $startMarker")
-//
-//            val frameNumber = ByteBuffer.wrap(data.sliceArray(2..3)).order(ByteOrder.LITTLE_ENDIAN).short.toInt()
-//            Log.d(ContentValues.TAG, "frameNumber: $frameNumber")
-//
             val seqNumber = ByteBuffer.wrap(data.sliceArray(4..5)).order(ByteOrder.LITTLE_ENDIAN).short.toInt()
-//            val seqNumberRev = Integer.toHexString(seqNumber)
-//            Log.d(ContentValues.TAG, "seqNumber: $seqNumber")
-//            Log.d(ContentValues.TAG, "seqNumberRev: $seqNumberRev")
 
             val alarmInfo = seqNumber/4096
             Log.d(ContentValues.TAG, "alarmInfo: $alarmInfo")
@@ -304,11 +329,6 @@ class AndroidBluetoothController(
                 Log.e(ContentValues.TAG, "Error parsing IMU data")
             }
         }
-
-        private fun byteToFloat(byteValue: Byte, minVal: Float, maxVal: Float): Float {
-            val normalized = (byteValue.toInt() and 0xFF) / 255f
-            return minVal + (maxVal - minVal) * normalized
-        }
     }
 
     private fun parseIMUDataYonsei(data: ByteArray) {
@@ -320,9 +340,9 @@ class AndroidBluetoothController(
         if (startMarker == "ST" && endMarker == "ED") {
 //                Log.e(TAG, "parsing success")
             val time = ByteBuffer.wrap(data.sliceArray(4..7)).order(ByteOrder.LITTLE_ENDIAN).getInt().toLong()
-            val accX = byteToFloat(buffer.get(8), -16.0f, 16.0f)    // 변환된 가속도 X
-            val accY = byteToFloat(buffer.get(9), -16.0f, 16.0f)    // 변환된 가속도 Y
-            val accZ = byteToFloat(buffer.get(10), -16.0f, 16.0f)    // 변환된 가속도 Z
+            val accX = byteToFloat(buffer.get(8), -4.0f, 4.0f)    // 변환된 가속도 X
+            val accY = byteToFloat(buffer.get(9), -4.0f, 4.0f)    // 변환된 가속도 Y
+            val accZ = byteToFloat(buffer.get(10), -4.0f, 4.0f)    // 변환된 가속도 Z
             val gyroX = byteToFloat(buffer.get(11), -2000f, 2000f) // 변환된 자이로스코프 X
             val gyroY = byteToFloat(buffer.get(12), -2000f, 2000f) // 변환된 자이로스코프 Y
             val gyroZ = byteToFloat(buffer.get(13), -2000f, 2000f) // 변환된 자이로스코프 Z
@@ -362,9 +382,9 @@ class AndroidBluetoothController(
             signedIntValue = intValue - 65536
         }
 
-        Log.d(ContentValues.TAG, "byte1: $byte1")
-        Log.d(ContentValues.TAG, "byte2: $byte2")
-        Log.d(ContentValues.TAG, "intValue: $signedIntValue")
+//        Log.d(ContentValues.TAG, "byte1: $byte1")
+//        Log.d(ContentValues.TAG, "byte2: $byte2")
+//        Log.d(ContentValues.TAG, "intValue: $signedIntValue")
 
         return signedIntValue
     }

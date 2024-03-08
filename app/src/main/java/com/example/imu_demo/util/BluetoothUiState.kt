@@ -1,6 +1,9 @@
 package com.example.imu_demo.util
 
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
 import com.example.imu_demo.domain.BluetoothDevice
+import com.example.imu_demo.presentation.SensorChoice
 import kotlinx.coroutines.flow.Flow
 
 data class BluetoothUiState(
@@ -18,4 +21,5 @@ data class BluetoothUiState(
     val gyroYValueStateFlow: Float? = null,
     val gyroZValueStateFlow: Float? = null,
     val tempValueStateFlow: Float? = null,
+
 )
