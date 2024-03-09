@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">IMU_Demo</string>
+    <string name="app_name">RTFallDT</string>
     <string name="text_scan">스캔</string>
     <string name="text_measurement">측정</string>
     <string name="text_analysis">분석</string>
