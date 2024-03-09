@@ -1,8 +1,6 @@
 package com.example.imu_demo.domain
 
-import com.example.imu_demo.presentation.SensorChoice
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 

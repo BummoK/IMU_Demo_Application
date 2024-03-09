@@ -5,7 +5,6 @@ import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -39,7 +37,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 
@@ -79,13 +76,14 @@ fun MeasurementScreen(
 
     val context = LocalContext.current
     var isRecording by remember { mutableStateOf(false) }
-    // 낙상검출 알고리즘 파라미터
+    // Parameters of Fall Detection Algorithm
     var velV by remember { mutableDoubleStateOf(0.0) }
     var acc by remember { mutableFloatStateOf(0.0F) }
     var gyro by remember { mutableFloatStateOf(0.0F) }
     var dect by remember { mutableStateOf(false) }
     var reset by remember { mutableStateOf(true) }
     var motionreset by remember { mutableStateOf(true) }
+    var mcuFall by remember { mutableStateOf(false) }
 
     val imageLoader = ImageLoader.Builder(LocalContext.current)
         .components {
@@ -175,6 +173,16 @@ fun MeasurementScreen(
     val gyroXValue by bluetoothViewModel.gyroXValue.collectAsState()
     val gyroYValue by bluetoothViewModel.gyroYValue.collectAsState()
     val gyroZValue by bluetoothViewModel.gyroZValue.collectAsState()
+    val alarmInfoValue by bluetoothViewModel.alarmInfoValue.collectAsState()
+
+    val mcuAlarm = when (alarmInfoValue) {
+        0 -> "Nothing"
+        2 -> "Low Battery"
+        4 -> "Standby Battery"
+        8 -> "Fall Detction"
+        else -> "Unknown"
+    }
+
 
     // 차트 데이터 리스트
     val accChartDataX = remember { mutableListOf<Entry>() }
@@ -184,8 +192,8 @@ fun MeasurementScreen(
     val gyroChartDataY = remember { mutableListOf<Entry>() }
     val gyroChartDataZ = remember { mutableListOf<Entry>() }
 
-    // 센서 값 업데이트
-    LaunchedEffect(timerValue, accXValue, accYValue, accZValue, gyroXValue, gyroYValue, gyroZValue) {
+    // Update the value of sensors
+    LaunchedEffect(timerValue, accXValue, accYValue, accZValue, gyroXValue, gyroYValue, gyroZValue, alarmInfoValue) {
         val sensorData = SensorData(
             time = System.currentTimeMillis(),
             accX = accXValue ?: 0f,
@@ -294,6 +302,7 @@ fun MeasurementScreen(
             Card(
                 modifier = Modifier
                     .fillMaxWidth(0.5f)
+                    .height(200.dp)
                     .weight(1f),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
@@ -317,19 +326,19 @@ fun MeasurementScreen(
                 modifier = Modifier.weight(1f)
             ) {
                 Card(
-                    modifier = Modifier.fillMaxWidth().height(81.dp),
+                    modifier = Modifier.fillMaxWidth().height(65.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(
                         modifier = Modifier.padding(10.dp)
                     ) {
                         Text("Current Velocity", style = MaterialTheme.typography.bodyLarge)
-                        Text("${"%.2f".format(velV)} m/s", style = MaterialTheme.typography.bodyMedium)
+                        Text("${"%.2f".format(velV)} m/s", style = MaterialTheme.typography.bodySmall)
                     }
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 Card(
-                    modifier = Modifier.fillMaxWidth().height(81.dp),
+                    modifier = Modifier.fillMaxWidth().height(65.dp),
                     onClick = { reset = true },
                     colors = if (!reset) CardDefaults.cardColors(containerColor = Color.Red)
                     else CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -338,7 +347,20 @@ fun MeasurementScreen(
                         modifier = Modifier.padding(10.dp)
                     ) {
                         Text("Fall Detected", style = MaterialTheme.typography.bodyLarge)
-                        Text("${if (reset) "No" else "Yes"}")
+                        Text("${if (reset) "No" else "Yes"}", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth().height(65.dp),
+                    colors = if (alarmInfoValue==2) CardDefaults.cardColors(containerColor = Color.Red)
+                    else CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp)
+                    ) {
+                        Text("MCU Alarm", style = MaterialTheme.typography.bodyLarge)
+                        Text("$alarmInfoValue: $mcuAlarm", style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }

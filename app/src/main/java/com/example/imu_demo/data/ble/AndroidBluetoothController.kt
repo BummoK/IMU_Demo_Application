@@ -15,7 +15,6 @@ import android.content.Context
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.util.Log
-import androidx.compose.ui.graphics.Color
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -110,16 +109,6 @@ class AndroidBluetoothController(
 
     var serviceUUID: UUID? = null
     var imuDataCharUUID: UUID? = null
-
-    // 특성 참조 추가
-    private var timerChar: BluetoothGattCharacteristic? = null
-    private var accXChar: BluetoothGattCharacteristic? = null
-    private var accYChar: BluetoothGattCharacteristic? = null
-    private var accZChar: BluetoothGattCharacteristic? = null
-    private var gyroXChar: BluetoothGattCharacteristic? = null
-    private var gyroYChar: BluetoothGattCharacteristic? = null
-    private var gyroZChar: BluetoothGattCharacteristic? = null
-    private var tempChar: BluetoothGattCharacteristic? = null
 
     var time = 0L
 
