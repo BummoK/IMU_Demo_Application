@@ -106,6 +106,11 @@ class AndroidBluetoothController(
     private val _alarmInfoValueStateFlow = MutableStateFlow<Int?>(null)
     override val alarmInfoValueStateFlow: StateFlow<Int?> = _alarmInfoValueStateFlow
 
+    private val _rawDataStringStateFlow = MutableStateFlow<String?>(null)
+    override val rawDataStringStateFlow: StateFlow<String?> = _rawDataStringStateFlow
+
+    private val _receivedDataSizeStateFlow = MutableStateFlow<Int?>(null)
+    override val receivedDataSizeStateFlow: StateFlow<Int?> = _receivedDataSizeStateFlow
 
     var serviceUUID: UUID? = null
     var imuDataCharUUID: UUID? = null
@@ -250,6 +255,7 @@ class AndroidBluetoothController(
 
             // 받아온 데이터의 바이트 수를 로그로 출력
             Log.d(TAG, "Received data length: ${data.size} bytes")
+            _receivedDataSizeStateFlow.value = data.size
 
             if (characteristic.uuid == imuDataCharUUID) {
                 val dataString = data.joinToString(", ") { it.toString() }
@@ -260,7 +266,11 @@ class AndroidBluetoothController(
 
                 when (currentChoiceState.value) {
                     SensorChoice.SENSOR_1 -> Log.e(TAG, "Not connect the BLE sensor")
-                    SensorChoice.SENSOR_2 -> parseIMUDataSW(characteristic.value) // 혹은 다른 함수로 변경
+                    SensorChoice.SENSOR_2 ->
+                    {
+                        parseIMUDataSW(characteristic.value) // 혹은 다른 함수로 변경
+                        _rawDataStringStateFlow.value = dataString
+                    }
                     SensorChoice.SENSOR_3 -> parseIMUDataYonsei(characteristic.value)
                 }
             }

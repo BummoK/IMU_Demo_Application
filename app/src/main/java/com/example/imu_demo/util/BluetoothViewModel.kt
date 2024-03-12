@@ -9,6 +9,10 @@ import com.example.imu_demo.data.dao.AppDatabase
 import com.example.imu_demo.data.dao.CSVFileHandler
 import com.example.imu_demo.data.dao.SensorData
 import com.example.imu_demo.data.dao.SensorDataDao
+import com.example.imu_demo.data.dao.SensorDataDaoSW
+import com.example.imu_demo.data.dao.SensorDataDaoSWRaw
+import com.example.imu_demo.data.dao.SensorDataSW
+import com.example.imu_demo.data.dao.SensorDataSWRaw
 import com.example.imu_demo.domain.BluetoothController
 import com.example.imu_demo.domain.BluetoothDeviceDomain
 import com.example.imu_demo.domain.ConnectionResult
@@ -43,10 +47,10 @@ class BluetoothViewModel @Inject constructor(
     val gyroZValue = bluetoothController.gyroZValueStateFlow
     val batteryValue = bluetoothController.batteryValueStateFlow
     val alarmInfoValue = bluetoothController.alarmInfoValueStateFlow
+    val rawDataString = bluetoothController.rawDataStringStateFlow
+    val receivedDataSize = bluetoothController.receivedDataSizeStateFlow
 
     private val _state = MutableStateFlow(BluetoothUiState())
-    var currentSensorChoice = MutableStateFlow(SensorChoice.SENSOR_1) // 예시
-
 
     val state = combine(
         bluetoothController.scannedDevices,
@@ -129,9 +133,56 @@ class BluetoothViewModel @Inject constructor(
     }
 
 
-    fun saveSensorData(sensorData: SensorData) {
+    private fun determineCsvHeader(dao: Any): String {
+        return when (dao) {
+            is SensorDataDao -> "Time, AccX, AccY, AccZ, GyroX, GyroY, GyroZ, Motion, Risk"
+            is SensorDataDaoSW -> "Time, AccX, AccY, AccZ, GyroX, GyroY, GyroZ, Motion, Risk, Fall"
+            is SensorDataDaoSWRaw -> "DataSize, Data"
+            else -> throw IllegalArgumentException("Unsupported DAO type")
+        }
+    }
+
+    fun <T> saveSensorData(data: T, dao: Any) {
         viewModelScope.launch {
-            sensorDataDao.insert(sensorData)
+            when (dao) {
+                is SensorDataDao -> dao.insert(data as SensorData)
+                is SensorDataDaoSW -> dao.insert(data as SensorDataSW)
+                is SensorDataDaoSWRaw -> dao.insert(data as SensorDataSWRaw)
+                else -> throw IllegalArgumentException("Unsupported DAO type")
+            }
+        }
+    }
+
+    fun stopRecordingAndExportToCSV(
+        context: Context,
+        dao: Any,
+        fileNamePrefix: String,
+        convertToCsvLine: (Any) -> String,
+        onExportComplete: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            val fileName = "${fileNamePrefix}_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())}.csv"
+            val dataList = when (dao) {
+                is SensorDataDao -> dao.getAll().first().map { convertToCsvLine(it) }
+                is SensorDataDaoSW -> dao.getAll().first().map { convertToCsvLine(it) }
+                is SensorDataDaoSWRaw -> dao.getAll().first().map { convertToCsvLine(it) }
+                else -> throw IllegalArgumentException("Unsupported DAO type")
+            }
+
+            try {
+                val csvHeader = determineCsvHeader(dao)
+                CSVFileHandler.saveDataToCSV(context, dataList, fileName, csvHeader, { it }, "Experiments/$fileNamePrefix")
+                val fullPath = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Experiments/$fileNamePrefix/$fileName").absolutePath
+                Log.d("stopRecording", "Sensor data saved: $fullPath")
+                onExportComplete(fullPath)
+                when (dao) {
+                    is SensorDataDao -> dao.deleteAll()
+                    is SensorDataDaoSW -> dao.deleteAll()
+                    is SensorDataDaoSWRaw -> dao.deleteAll()
+                }
+            } catch (e: Exception) {
+                Log.e("stopRecording", "Error saving sensor data: ${e.message}")
+            }
         }
     }
 
@@ -143,24 +194,6 @@ class BluetoothViewModel @Inject constructor(
                         Log.d("SensorDataLog", "Data: $sensorData")
                     }
                 }
-        }
-    }
-
-    fun stopRecordingAndExportToCSV(context: Context, onExportComplete: (String) -> Unit) {
-        viewModelScope.launch {
-            val sensorDataList = sensorDataDao.getAll().first()
-            val fileName = "SensorData_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())}.csv"
-
-            try {
-                CSVFileHandler.saveDataToCSV(context, sensorDataList, fileName)
-                val fullPath = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-                    "Experiments/$fileName").absolutePath
-                Log.d("stopRecording", "Sensor data saved: $fullPath")
-                onExportComplete(fullPath) // 전체 경로를 콜백으로 전달
-                sensorDataDao.deleteAll()
-            } catch (e: Exception) {
-                Log.e("stopRecording", "Error saving sensor data: ${e.message}")
-            }
         }
     }
 
