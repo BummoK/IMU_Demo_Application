@@ -47,7 +47,6 @@ import coil.compose.rememberAsyncImagePainter
 import coil.decode.GifDecoder
 import coil.decode.ImageDecoderDecoder
 import com.example.imu_demo.R
-import com.example.imu_demo.data.dao.SensorData
 import com.example.imu_demo.util.BluetoothViewModel
 import com.example.imu_demo.util.DataPreprocessorMR
 import com.example.imu_demo.util.DataPreprocessorRP
@@ -57,7 +56,17 @@ import com.example.imu_demo.util.RiskPrediction
 import com.example.imu_demo.util.fallDetection
 import com.example.imu_demo.util.updateChartData
 
+import com.example.imu_demo.data.dao.AppDatabase
+import com.example.imu_demo.data.dao.CSVFileHandler
+import com.example.imu_demo.data.dao.SensorData
+import com.example.imu_demo.data.dao.SensorDataDao
+import com.example.imu_demo.data.dao.SensorDataDaoSW
+import com.example.imu_demo.data.dao.SensorDataDaoSWRaw
+import com.example.imu_demo.data.dao.SensorDataSW
+import com.example.imu_demo.data.dao.SensorDataSWRaw
+
 import com.github.mikephil.charting.data.*
+import java.util.UUID
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -174,6 +183,8 @@ fun MeasurementScreen(
     val gyroYValue by bluetoothViewModel.gyroYValue.collectAsState()
     val gyroZValue by bluetoothViewModel.gyroZValue.collectAsState()
     val alarmInfoValue by bluetoothViewModel.alarmInfoValue.collectAsState()
+    val rawDataString by bluetoothViewModel.rawDataString.collectAsState()
+    val receivedDataSize by bluetoothViewModel.receivedDataSize.collectAsState()
 
     val mcuAlarm = when (alarmInfoValue) {
         0 -> "Nothing"
@@ -181,6 +192,14 @@ fun MeasurementScreen(
         4 -> "Standby Battery"
         8 -> "Fall Detction"
         else -> "Unknown"
+    }
+
+    val fallMCU = if(alarmInfoValue==8) 1 else 0
+
+    val selectedSensor = when (currentChoiceState.value) {
+        SensorChoice.SENSOR_1 -> 0
+        SensorChoice.SENSOR_2 -> 1
+        SensorChoice.SENSOR_3 -> 2
     }
 
 
@@ -192,22 +211,69 @@ fun MeasurementScreen(
     val gyroChartDataY = remember { mutableListOf<Entry>() }
     val gyroChartDataZ = remember { mutableListOf<Entry>() }
 
+    val appContext = LocalContext.current
+    val db = AppDatabase.getDatabase(appContext)
+    val sensorDataDao: SensorDataDao = db.sensorDataDao()
+    val sensorDataDaoSW: SensorDataDaoSW = db.sensorDataDaoSW()
+    val sensorDataDaoSWRaw: SensorDataDaoSWRaw = db.sensorDataDaoSWRaw()
+
+    var sensorData: SensorData? = null
+    var sensorDataSW: SensorDataSW? = null
+    var sensorDataSWRaw: SensorDataSWRaw? = null
+
+    val onExportComplete: (String) -> Unit = { fullPath ->
+        // 파일 내보내기 완료 시 실행될 코드
+        Log.d("ExportComplete", "File exported to: $fullPath")
+    }
+
     // Update the value of sensors
-    LaunchedEffect(timerValue, accXValue, accYValue, accZValue, gyroXValue, gyroYValue, gyroZValue, alarmInfoValue) {
-        val sensorData = SensorData(
-            time = System.currentTimeMillis(),
-            accX = accXValue ?: 0f,
-            accY = accYValue ?: 0f,
-            accZ = accZValue ?: 0f,
-            gyroX = gyroXValue ?: 0f,
-            gyroY = gyroYValue ?: 0f,
-            gyroZ = gyroZValue ?: 0f,
-            motion = maxClassStateMR,
-            risk = kotlin.math.abs(maxProbStateRP)
-        )
+    LaunchedEffect(timerValue, accXValue, accYValue, accZValue, gyroXValue, gyroYValue, gyroZValue, alarmInfoValue, rawDataString, receivedDataSize) {
+
+        if (selectedSensor==0 or 2)
+        {
+            sensorData = SensorData(
+                time = System.currentTimeMillis(),
+                accX = accXValue ?: 0f,
+                accY = accYValue ?: 0f,
+                accZ = accZValue ?: 0f,
+                gyroX = gyroXValue ?: 0f,
+                gyroY = gyroYValue ?: 0f,
+                gyroZ = gyroZValue ?: 0f,
+                motion = maxClassStateMR,
+                risk = kotlin.math.abs(maxProbStateRP)
+            )
+        }
+        else if (selectedSensor == 1)
+        {
+            sensorDataSW = SensorDataSW(
+                time = System.currentTimeMillis(),
+                accX = accXValue ?: 0f,
+                accY = accYValue ?: 0f,
+                accZ = accZValue ?: 0f,
+                gyroX = gyroXValue ?: 0f,
+                gyroY = gyroYValue ?: 0f,
+                gyroZ = gyroZValue ?: 0f,
+                motion = maxClassStateMR,
+                risk = kotlin.math.abs(maxProbStateRP),
+                fall = fallMCU
+            )
+
+            sensorDataSWRaw = SensorDataSWRaw(
+                dataSize = receivedDataSize ?: 0,
+                dataString = rawDataString ?: "null"
+            )
+        }
+
+
 
         if (isRecording) {
-            bluetoothViewModel.saveSensorData(sensorData)
+            if (selectedSensor == 0 or 2) {
+                bluetoothViewModel.saveSensorData(sensorData, sensorDataDao)
+            } else if (selectedSensor == 1)
+            {
+                bluetoothViewModel.saveSensorData(sensorDataSW, sensorDataDaoSW)
+                bluetoothViewModel.saveSensorData(sensorDataSWRaw, sensorDataDaoSWRaw)
+            }
         }
 
         val time = (timerValue ?: 0L) / 1000f // timerValue를 Float으로 변환
@@ -326,7 +392,9 @@ fun MeasurementScreen(
                 modifier = Modifier.weight(1f)
             ) {
                 Card(
-                    modifier = Modifier.fillMaxWidth().height(65.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(65.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(
@@ -338,7 +406,9 @@ fun MeasurementScreen(
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 Card(
-                    modifier = Modifier.fillMaxWidth().height(65.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(65.dp),
                     onClick = { reset = true },
                     colors = if (!reset) CardDefaults.cardColors(containerColor = Color.Red)
                     else CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -352,8 +422,10 @@ fun MeasurementScreen(
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 Card(
-                    modifier = Modifier.fillMaxWidth().height(65.dp),
-                    colors = if (alarmInfoValue==2) CardDefaults.cardColors(containerColor = Color.Red)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(65.dp),
+                    colors = if (alarmInfoValue==8) CardDefaults.cardColors(containerColor = Color.Red)
                     else CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(
@@ -446,10 +518,50 @@ fun MeasurementScreen(
                 } else {
                     // 데이터 기록을 중지합니다. LaunchedEffect는 더 이상 데이터를 저장하지 않습니다.
                     // 저장된 데이터를 CSV 파일로 내보냅니다.
-                    bluetoothViewModel.stopRecordingAndExportToCSV(context) { filePath ->
-                        Toast.makeText(context, "Data saved to $filePath", Toast.LENGTH_LONG).show()
-                        Log.d("MeasurementScreen", "Sensor data saved: $filePath")
+                    if (selectedSensor == 0 or 2) {
+                        bluetoothViewModel.stopRecordingAndExportToCSV(
+                            context = context,
+                            dao = sensorDataDao,
+                            fileNamePrefix = "SensorData",
+                            convertToCsvLine = { data ->
+                                if (data is SensorData) {
+                                    "${data.time}, ${data.accX}, ${data.accY}, ${data.accZ}, ${data.gyroX}, ${data.gyroY}, ${data.gyroZ}, ${data.motion}, ${data.risk}"
+                                } else ""
+                            },
+                            onExportComplete = onExportComplete
+                        )
+                        Toast.makeText(context, "Data saved to Download/Experiment/", Toast.LENGTH_LONG).show()
+                    } else if (selectedSensor == 1)
+                    {
+                        bluetoothViewModel.stopRecordingAndExportToCSV(
+                            context = context,
+                            dao = sensorDataDaoSW,
+                            fileNamePrefix = "SensorDataSW",
+                            convertToCsvLine = { data ->
+                                if (data is SensorDataSW) {
+                                    "${data.time}, ${data.accX}, ${data.accY}, ${data.accZ}, ${data.gyroX}, ${data.gyroY}, ${data.gyroZ}, ${data.motion}, ${data.risk}, ${data.fall}"
+                                } else ""
+                            },
+                            onExportComplete = onExportComplete
+                        )
+                        bluetoothViewModel.stopRecordingAndExportToCSV(
+                            context = context,
+                            dao = sensorDataDaoSWRaw,
+                            fileNamePrefix = "SensorDataSWRaw",
+                            convertToCsvLine = { data ->
+                                if (data is SensorDataSWRaw) {
+                                    "${data.dataSize}, ${data.dataString}"
+                                } else ""
+                            },
+                            onExportComplete = onExportComplete
+                        )
+                        Toast.makeText(context, "Data saved to Download/Experiment/", Toast.LENGTH_LONG).show()
                     }
+
+//                    bluetoothViewModel.stopRecordingAndExportToCSV(context) { filePath ->
+//                        Toast.makeText(context, "Data saved to $filePath", Toast.LENGTH_LONG).show()
+//                        Log.d("MeasurementScreen", "Sensor data saved: $filePath")
+//                    }
                 }
             })
         }

@@ -17,3 +17,27 @@ interface SensorDataDao {
     @Query("DELETE from SensorData")
     suspend fun deleteAll()
 }
+
+@Dao
+interface SensorDataDaoSW {
+    @Insert
+    suspend fun insert(sensorDataSW: SensorDataSW)
+
+    @Query("SELECT * FROM SensorDataSW")
+    fun getAll(): Flow<List<SensorDataSW>> // LiveData 대신 Flow를 반환
+
+    @Query("DELETE from SensorDataSW")
+    suspend fun deleteAll()
+}
+
+@Dao
+interface SensorDataDaoSWRaw {
+    @Insert
+    suspend fun insert(sensorDataSWRaw: SensorDataSWRaw)
+
+    @Query("SELECT * FROM SensorDataSWRaw")
+    fun getAll(): Flow<List<SensorDataSWRaw>> // LiveData 대신 Flow를 반환
+
+    @Query("DELETE from SensorDataSWRaw")
+    suspend fun deleteAll()
+}
