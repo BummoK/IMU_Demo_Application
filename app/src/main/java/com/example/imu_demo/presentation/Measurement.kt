@@ -359,7 +359,7 @@ fun MeasurementScreen(
     Column(modifier = Modifier
         .fillMaxSize()
         .background(backgroundColor)
-        .padding(16.dp),
+        .padding(10.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -373,7 +373,7 @@ fun MeasurementScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(
-                    modifier = Modifier.padding(10.dp)
+                    modifier = Modifier.padding(5.dp)
                 ) {
                     Text("Parameter", style = MaterialTheme.typography.bodyLarge)
                     Text("Timer: ${timerValue ?: "N/A"}", style = MaterialTheme.typography.bodySmall)
@@ -398,7 +398,7 @@ fun MeasurementScreen(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(
-                        modifier = Modifier.padding(10.dp)
+                        modifier = Modifier.padding(5.dp)
                     ) {
                         Text("Current Velocity", style = MaterialTheme.typography.bodyLarge)
                         Text("${"%.2f".format(velV)} m/s", style = MaterialTheme.typography.bodySmall)
@@ -414,7 +414,7 @@ fun MeasurementScreen(
                     else CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(
-                        modifier = Modifier.padding(10.dp)
+                        modifier = Modifier.padding(5.dp)
                     ) {
                         Text("Fall Detected", style = MaterialTheme.typography.bodyLarge)
                         Text("${if (reset) "No" else "Yes"}", style = MaterialTheme.typography.bodySmall)
@@ -429,7 +429,7 @@ fun MeasurementScreen(
                     else CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(
-                        modifier = Modifier.padding(10.dp)
+                        modifier = Modifier.padding(5.dp)
                     ) {
                         Text("MCU Alarm", style = MaterialTheme.typography.bodyLarge)
                         Text("$alarmInfoValue: $mcuAlarm", style = MaterialTheme.typography.bodySmall)
@@ -448,7 +448,7 @@ fun MeasurementScreen(
                 else CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(
-                    modifier = Modifier.padding(10.dp)
+                    modifier = Modifier.padding(5.dp)
                 ) {
                     Text("Current Motion", style = MaterialTheme.typography.bodyLarge)
                     Text("Class ${if (motionreset) "$maxClassStateMR: $motionName" 
@@ -478,7 +478,7 @@ fun MeasurementScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(
-                    modifier = Modifier.padding(10.dp)
+                    modifier = Modifier.padding(5.dp)
                 ) {
                     Text("Risk Prediction", style = MaterialTheme.typography.bodyLarge)
                     Text("Risk: ${"%.2f".format(kotlin.math.abs(maxProbStateRP))}",

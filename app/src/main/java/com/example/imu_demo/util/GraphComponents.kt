@@ -61,7 +61,7 @@ fun LineChartComposable(
             AndroidView(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(100.dp),
+                    .height(80.dp),
                 factory = { context ->
                     LineChart(context).apply {
                         data = LineData(dataSetX, dataSetY, dataSetZ)
@@ -134,7 +134,7 @@ fun AccChartComposable(sensorDataList: List<SensorData>) {
     AndroidView(
         modifier = Modifier
             .fillMaxWidth()
-            .height(120.dp),
+            .height(100.dp),
         factory = { context ->
             LineChart(context).apply {
                 // LineChart에 데이터 세트 추가
@@ -208,7 +208,7 @@ fun GyroChartComposable(sensorDataList: List<SensorData>) {
     AndroidView(
         modifier = Modifier
             .fillMaxWidth()
-            .height(120.dp),
+            .height(100.dp),
         factory = { context ->
             LineChart(context).apply {
                 // LineChart에 데이터 세트 추가
@@ -263,7 +263,7 @@ fun MotionChartComposable(sensorDataList: List<SensorData>) {
     AndroidView(
         modifier = Modifier
             .fillMaxWidth()
-            .height(120.dp),
+            .height(100.dp),
         factory = { context ->
             LineChart(context).apply {
                 // LineChart에 데이터 세트 추가
@@ -317,7 +317,7 @@ fun RiskChartComposable(sensorDataList: List<SensorData>) {
     AndroidView(
         modifier = Modifier
             .fillMaxWidth()
-            .height(120.dp),
+            .height(100.dp),
         factory = { context ->
             LineChart(context).apply {
                 // LineChart에 데이터 세트 추가

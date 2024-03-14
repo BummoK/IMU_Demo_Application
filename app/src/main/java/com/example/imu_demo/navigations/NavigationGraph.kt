@@ -101,8 +101,8 @@ fun BottomNavigation(navController: NavHostController
                         painter = painterResource(id = item.icon),
                         contentDescription = stringResource(id = item.title),
                         modifier = Modifier
-                            .width(26.dp)
-                            .height(26.dp)
+                            .width(25.dp)
+                            .height(25.dp)
                     )
                 },
                 label = { Text(stringResource(id = item.title), fontSize = 9.sp) },
