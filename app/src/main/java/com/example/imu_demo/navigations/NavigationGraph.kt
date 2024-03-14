@@ -24,17 +24,27 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.imu_demo.presentation.AnalysisScreen
+import com.example.imu_demo.presentation.MeasurementBuiltInScreen
 import com.example.imu_demo.util.BluetoothViewModel
 import com.example.imu_demo.presentation.MeasurementScreen
 import com.example.imu_demo.presentation.ScanScreen
+import com.example.imu_demo.presentation.SensorChoice
 import com.example.imu_demo.presentation.currentChoiceState
 import com.example.imu_demo.util.AnalysisViewModel
+import com.example.imu_demo.util.BuiltInViewModel
 
 @Composable
 fun NavigationGraph(navController: NavHostController) {
     val bluetoothViewModel = hiltViewModel<BluetoothViewModel>()
     val analysisViewModel = hiltViewModel<AnalysisViewModel>()
+    val sensorViewModel = hiltViewModel<BuiltInViewModel>()
     val state by bluetoothViewModel.state.collectAsState()
+
+    val selectedSensor = when (currentChoiceState.value) {
+        SensorChoice.SENSOR_1 -> 0
+        SensorChoice.SENSOR_2 -> 1
+        SensorChoice.SENSOR_3 -> 2
+    }
 
     NavHost(
         navController = navController,
@@ -57,9 +67,15 @@ fun NavigationGraph(navController: NavHostController) {
         }
 
         composable(BottomNavItem.Measurement.screenRoute){
-            MeasurementScreen(
-                bluetoothViewModel = bluetoothViewModel,
-            )
+            if (selectedSensor == 0) {
+                MeasurementBuiltInScreen(
+                    bluetoothViewModel = bluetoothViewModel
+                )
+            } else {
+                MeasurementScreen(
+                    bluetoothViewModel = bluetoothViewModel
+                )
+            }
         }
 
         composable(BottomNavItem.Analysis.screenRoute){

@@ -13,6 +13,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.ButtonDefaults
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -27,11 +29,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import com.example.imu_demo.R
 
 import com.example.imu_demo.domain.BluetoothDevice
 import com.example.imu_demo.util.BluetoothUiState
+import com.example.imu_demo.util.BuiltInViewModel
 
 enum class SensorChoice {
     SENSOR_1, SENSOR_2, SENSOR_3
@@ -47,6 +51,7 @@ fun ScanScreen(
     onDeviceClick: (BluetoothDevice) -> Unit,
     onDeviceDisconnect: (BluetoothDevice) -> Unit,
     currentChoiceState: MutableState<SensorChoice>,
+    sensorViewModel: BuiltInViewModel = hiltViewModel()
 ) {
     val applicationContext = LocalContext.current
     var isScanning by remember { mutableStateOf(false) }
@@ -58,6 +63,8 @@ fun ScanScreen(
         SensorChoice.SENSOR_2 -> "SW"
         SensorChoice.SENSOR_3 -> "IMU"
     }
+    val accelerometerDetails by sensorViewModel.accelerometerDetails.collectAsState()
+    val gyroscopeDetails by sensorViewModel.gyroscopeDetails.collectAsState()
 
     val darkTheme = isSystemInDarkTheme()
     val backgroundColor = if (darkTheme) {
@@ -132,15 +139,53 @@ fun ScanScreen(
                     .fillMaxSize()
                     .background(backgroundColor)
             ) {
-                BluetoothDeviceList(
+
+                if (currentChoice == SensorChoice.SENSOR_1) {
+                    Text(
+                        "내장 센서 정보:",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 24.sp,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                    Spacer(modifier = Modifier.height(5.dp))
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(10.dp),
+                        colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(10.dp)
+                        ) {
+                            Text("Built In Accelerometer", style = androidx.compose.material3.MaterialTheme.typography.bodyLarge)
+                            Text("$accelerometerDetails", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(5.dp))
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(10.dp),
+                        colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(10.dp)
+                        ) {
+                            Text("Built In Gyroscope", style = androidx.compose.material3.MaterialTheme.typography.bodyLarge)
+                            Text("$gyroscopeDetails", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                } else {
+                    BluetoothDeviceList(
 //                    pairedDevices = state.pairedDevices,
-                    scannedDevices = state.scannedDevices,
-                    onClickConnect = onDeviceClick, // 연결
-                    onClickDisconnect = onDeviceDisconnect, // 연결 해제
-                    wantedText = wantedText,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f))
+                        scannedDevices = state.scannedDevices,
+                        onClickConnect = onDeviceClick, // 연결
+                        onClickDisconnect = onDeviceDisconnect, // 연결 해제
+                        wantedText = wantedText,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f))
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceAround
@@ -183,16 +228,9 @@ fun ScanScreen(
                             SensorChoice.SENSOR_3 -> Color(0xFFE96982)
                         }
                     )
-
                     ScanButton(isScanning = isScanning, onScanClick = {
                         isScanning = !isScanning
-                        if (isScanning)
-                        {
-                            onStartScan()
-                        } else
-                        {
-                            onStopScan()
-                        }
+                        if (isScanning) onStartScan() else onStopScan()
                     })
                 }
             }
