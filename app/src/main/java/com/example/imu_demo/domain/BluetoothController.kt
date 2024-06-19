@@ -22,11 +22,14 @@ interface BluetoothController {
     val rawDataStringStateFlow: StateFlow<String?>
     val receivedDataSizeStateFlow: StateFlow<Int?>
 
+    val isRecording: StateFlow<Boolean>
+
     fun startDiscovery()
     fun stopDiscovery()
     fun allocateUUIDs()
     fun connectToDevice(device: BluetoothDeviceDomain): Flow<ConnectionResult> // 수정된 시그니처
     fun disconnectFromDevice(device: BluetoothDeviceDomain) // 추가된 메서드
     fun closeConnection()
+    fun toggleRecording()
     fun release()
 }

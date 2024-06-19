@@ -15,6 +15,12 @@ import android.content.Context
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.util.Log
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
+import com.example.imu_demo.data.dao.AppDatabase
+import com.example.imu_demo.data.dao.SensorDataDaoSWRaw
+import com.example.imu_demo.data.dao.SensorDataSWRaw
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,13 +35,21 @@ import com.example.imu_demo.domain.BluetoothDeviceDomain
 import com.example.imu_demo.domain.ConnectionResult
 import com.example.imu_demo.presentation.SensorChoice
 import com.example.imu_demo.presentation.currentChoiceState
+import com.example.imu_demo.util.DataCallback
+import kotlinx.coroutines.delay
 
 @SuppressLint("MissingPermission")
 class AndroidBluetoothController(
-    private val context: Context
+    private val context: Context,
 ): BluetoothController {
 
     private val TAG = "Central"
+
+    private var dataCallback: DataCallback? = null
+
+    fun setDataCallback(callback: DataCallback) {
+        dataCallback = callback
+    }
 
     private val bluetoothManager by lazy {
         context.getSystemService(BluetoothManager::class.java)
@@ -111,6 +125,13 @@ class AndroidBluetoothController(
 
     private val _receivedDataSizeStateFlow = MutableStateFlow<Int?>(null)
     override val receivedDataSizeStateFlow: StateFlow<Int?> = _receivedDataSizeStateFlow
+
+    private var fallIndicatorCounter = 0 // 추가: 상태를 유지할 변수
+
+    private val _isRecording = MutableStateFlow(false)
+    override val isRecording: StateFlow<Boolean>
+        get() = _isRecording.asStateFlow()
+
 
     var serviceUUID: UUID? = null
     var imuDataCharUUID: UUID? = null
@@ -192,6 +213,15 @@ class AndroidBluetoothController(
         }
     }
 
+    override fun toggleRecording() {
+        _isRecording.value = !_isRecording.value
+    }
+
+    val onExportComplete: (String) -> Unit = { fullPath ->
+        // 파일 내보내기 완료 시 실행될 코드
+        Log.d("ExportComplete", "File exported to: $fullPath")
+    }
+
     private val gattClientCallback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             super.onConnectionStateChange(gatt, status, newState)
@@ -247,6 +277,7 @@ class AndroidBluetoothController(
             }
         }
 
+        @Deprecated("Deprecated in Java")
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
             super.onCharacteristicChanged(gatt, characteristic)
 
@@ -254,7 +285,7 @@ class AndroidBluetoothController(
             val data = characteristic.value
 
             // 받아온 데이터의 바이트 수를 로그로 출력
-            Log.d(TAG, "Received data length: ${data.size} bytes")
+//            Log.d(TAG, "Received data length: ${data.size} bytes")
             _receivedDataSizeStateFlow.value = data.size
 
             if (characteristic.uuid == imuDataCharUUID) {
@@ -270,6 +301,7 @@ class AndroidBluetoothController(
                     {
                         parseIMUDataSW(characteristic.value) // 혹은 다른 함수로 변경
                         _rawDataStringStateFlow.value = dataString
+                        dataCallback?.onDataReceived(dataString, data.size)
                     }
                     SensorChoice.SENSOR_3 -> parseIMUDataYonsei(characteristic.value)
                 }
@@ -283,13 +315,26 @@ class AndroidBluetoothController(
 
             val buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
             val bufferLength = data.size
-            Log.d(ContentValues.TAG, "bufferLength: $bufferLength")
+//            Log.d(ContentValues.TAG, "bufferLength: $bufferLength")
+
+            val fallIndicator = String(data.sliceArray(0..2), Charsets.UTF_8)
+            if (fallIndicator == "Q=2")
+            {
+                val alarmInfo = 8
+                _alarmInfoValueStateFlow.value = alarmInfo
+                fallIndicatorCounter = 0
+            } else {
+                fallIndicatorCounter += 1
+                if (fallIndicatorCounter >= 2) {
+                    val alarmInfo = 0
+                    _alarmInfoValueStateFlow.value = alarmInfo
+                    fallIndicatorCounter = 0 // 카운터 초기화
+                }
+            }
+
 
             val startMarker = String(data.sliceArray(0..1), Charsets.UTF_8)
-            val seqNumber = ByteBuffer.wrap(data.sliceArray(4..5)).order(ByteOrder.LITTLE_ENDIAN).short.toInt()
-
-            val alarmInfo = seqNumber/4096
-            Log.d(ContentValues.TAG, "alarmInfo: $alarmInfo")
+            val frameNumber = ByteBuffer.wrap(data.sliceArray(2..3)).order(ByteOrder.LITTLE_ENDIAN).short.toInt()
 
             if (startMarker == "SD") {
                 var dataBlockNum = 0
@@ -304,6 +349,7 @@ class AndroidBluetoothController(
                         Log.e(ContentValues.TAG, "Number of data is lack")
                     }
                 }
+
                 for (i in 0 until dataBlockNum) {
                     val accX = convertBytesToInt(buffer.get(6+14*i), buffer.get(7+14*i))/8192.0
                     val accY = convertBytesToInt(buffer.get(8+14*i), buffer.get(9+14*i))/8192.0
@@ -313,15 +359,16 @@ class AndroidBluetoothController(
                     val gyroZ = convertBytesToInt(buffer.get(16+14*i), buffer.get(17+14*i))/65.536
 
                     // 이제 각 값들을 StateFlow에 업데이트
-                    _timerValueStateFlow.value = time
+                    _timerValueStateFlow.value = frameNumber.toLong()
                     _accXValueStateFlow.value = accX.toFloat()
                     _accYValueStateFlow.value = accY.toFloat()
                     _accZValueStateFlow.value = accZ.toFloat()
                     _gyroXValueStateFlow.value = gyroX.toFloat()
                     _gyroYValueStateFlow.value = gyroY.toFloat()
                     _gyroZValueStateFlow.value = gyroZ.toFloat()
-                    _alarmInfoValueStateFlow.value = alarmInfo
-                    time += 1L
+//                    time += 1L
+//                    Log.w(ContentValues.TAG, "i_value: $i")
+//                    Log.w(ContentValues.TAG, "x_value: $accX")
                 }
 
             } else {

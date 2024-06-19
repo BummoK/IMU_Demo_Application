@@ -456,7 +456,6 @@ fun MeasurementBuiltInScreen(
                     // 데이터 기록을 중지합니다. LaunchedEffect는 더 이상 데이터를 저장하지 않습니다.
                     // 저장된 데이터를 CSV 파일로 내보냅니다.
                     bluetoothViewModel.stopRecordingAndExportToCSV(
-                        context = context,
                         dao = sensorDataDao,
                         fileNamePrefix = "SensorData",
                         convertToCsvLine = { data ->

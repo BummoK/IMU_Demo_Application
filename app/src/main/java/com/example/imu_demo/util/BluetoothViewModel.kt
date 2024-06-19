@@ -5,6 +5,7 @@ import android.os.Environment
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.util.Log
+import com.example.imu_demo.data.ble.AndroidBluetoothController
 import com.example.imu_demo.data.dao.AppDatabase
 import com.example.imu_demo.data.dao.CSVFileHandler
 import com.example.imu_demo.data.dao.SensorData
@@ -18,6 +19,7 @@ import com.example.imu_demo.domain.BluetoothDeviceDomain
 import com.example.imu_demo.domain.ConnectionResult
 import com.example.imu_demo.presentation.SensorChoice
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -30,10 +32,12 @@ import javax.inject.Inject
 
 @HiltViewModel
 class BluetoothViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val bluetoothController: BluetoothController,
     private val sensorDataDao: SensorDataDao,
+    private val sensorDataDaoSWRaw: SensorDataDaoSWRaw,
     private val appDatabase: AppDatabase
-): ViewModel() {
+): ViewModel(), DataCallback {
 
     private val TAG = "BLEViewModel"
 
@@ -51,6 +55,8 @@ class BluetoothViewModel @Inject constructor(
     val receivedDataSize = bluetoothController.receivedDataSizeStateFlow
 
     private val _state = MutableStateFlow(BluetoothUiState())
+
+    val isRecording = bluetoothController.isRecording
 
     val state = combine(
         bluetoothController.scannedDevices,
@@ -74,6 +80,11 @@ class BluetoothViewModel @Inject constructor(
                 errorMessage = error
             ) }
         }.launchIn(viewModelScope)
+
+        if (bluetoothController is AndroidBluetoothController) {
+            bluetoothController.setDataCallback(this)
+        }
+
     }
 
 
@@ -142,6 +153,20 @@ class BluetoothViewModel @Inject constructor(
         }
     }
 
+    override fun onDataReceived(dataString: String, dataSize: Int) {
+        handleIncomingData(dataString, dataSize)
+    }
+
+    private fun handleIncomingData(dataString: String, dataSize: Int) {
+        if (isRecording.value) {
+            val sensorDataSWRaw = SensorDataSWRaw(
+                dataSize = dataSize,
+                dataString = dataString
+            )
+            saveSensorData(sensorDataSWRaw, sensorDataDaoSWRaw)
+        }
+    }
+
     fun <T> saveSensorData(data: T, dao: Any) {
         viewModelScope.launch {
             when (dao) {
@@ -153,8 +178,26 @@ class BluetoothViewModel @Inject constructor(
         }
     }
 
+    fun toggleRecording(){
+        bluetoothController.toggleRecording()
+    }
+
+    fun stopRecordingAndExport() {
+        stopRecordingAndExportToCSV(
+            dao = sensorDataDaoSWRaw,
+            fileNamePrefix = "SensorDataSWRaw",
+            convertToCsvLine = { data ->
+                if (data is SensorDataSWRaw) {
+                    "${data.dataSize}, ${data.dataString}"
+                } else ""
+            },
+            onExportComplete = { fullPath ->
+                Log.d(TAG, "Sensor data saved: $fullPath")
+            }
+        )
+    }
+
     fun stopRecordingAndExportToCSV(
-        context: Context,
         dao: Any,
         fileNamePrefix: String,
         convertToCsvLine: (Any) -> String,
@@ -196,6 +239,7 @@ class BluetoothViewModel @Inject constructor(
                 }
         }
     }
+
 
     override fun onCleared() {
         super.onCleared()
